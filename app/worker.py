@@ -72,28 +72,45 @@ def release_container(container_name):
 # MAIN EXECUTION FUNCTION
 # -----------------------------
 def execute_code(job_data):
+    start_time = time.time()
     job_id = job_data["job_id"]
     code = job_data["code"]
+    user_ip = job_data["user_ip"]
+    user_job_key = f"user_jobs:{user_ip}"
+
+    status = "error"
+    output = ""
+    error = ""
 
     container_name = None  # for safety
 
     try:
+        redis_conn.set(job_id, json.dumps({
+            "status": "running",
+            "output": "",
+            "error": ""
+        }))
         # 1️ Lock container
         container_name = get_free_container()
 
         # 2️ Store code
         file_path = store_code_to_file(code, job_id)
-        container_file = f"/app/{job_id}.py"
+        container_file = f"/tmp/{job_id}.py"
 
         #  Clean container before use
         cleanup = subprocess.run(
-            ["docker", "exec", container_name, "sh", "-c", "rm -rf /app/*"],
+            ["docker", "exec", container_name, "sh", "-c", "rm -f /tmp/*.py"],
             capture_output=True,
             text=True
         )
 
         if cleanup.returncode != 0:
-            raise Exception(f"Cleanup failed: {cleanup.stderr}")
+            print("Container unhealthy. Restarting...")
+
+            subprocess.run(["docker", "restart", container_name])
+
+            time.sleep(1)
+            # raise Exception(f"Cleanup failed: {cleanup.stderr}")
 
         # 3️ Copy file to container
         # cp_result = subprocess.run(
@@ -126,7 +143,7 @@ def execute_code(job_data):
             ["docker", "exec", container_name, "python", container_file],
             capture_output=True,
             text=True,
-            timeout=10
+            timeout=5
         )
 
         print("RETURN CODE:", result.returncode)
@@ -141,16 +158,27 @@ def execute_code(job_data):
         subprocess.run(
             ["docker", "exec", container_name, "rm", "-f", container_file]
         )
-
+        exit_reason = "success" if result.returncode == 0 else "error"
         status = "completed"
         output = result.stdout
         error = ""
 
     except subprocess.TimeoutExpired:
         print(" Timeout occurred")
-        raise Exception("Execution timed out")
+        exit_reason = "timeout"
+        status = "timeout"
+        output = ""
+        error = "Code execution exceeded time limit (5 seconds)"
+
+        # Kill python process if still running
+        subprocess.run(
+            ["docker", "exec", container_name, "pkill", "-f", "python"],
+            capture_output=True
+        )
+        # raise Exception("Execution timed out")
 
     except Exception as e:
+        exit_reason = "error"
         print(" Exception:", str(e))
         raise e  # IMPORTANT for retry
 
@@ -158,19 +186,29 @@ def execute_code(job_data):
         # Always release container
         if container_name:
             release_container(container_name)
+        redis_conn.decr(user_job_key)
+        execution_time = round(time.time() - start_time, 3)
 
-    # Store result
-    redis_conn.set(job_id, json.dumps({
-        "status": status,
-        "output": output,
-        "error": error
-    }))
+        # Store result
+        redis_conn.set(job_id, json.dumps({
+            "status": status,
+            "output": output,
+            "error": error,
+            "execution_time": execution_time,
+            "container_name": container_name,
+            "exit_reason": exit_reason,
+            "timestamp": int(time.time())
+        }))
 
     return {
         "job_id": job_id,
         "status": status,
         "output": output,
-        "error": error
+        "error": error,
+        "execution_time": execution_time,
+        "container_name": container_name,
+        "exit_reason": exit_reason,
+        "timestamp": int(time.time())
     }
 
 # -----------------------------

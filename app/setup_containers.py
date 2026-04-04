@@ -22,7 +22,10 @@ for c in containers:
     "--read-only",
     "--tmpfs", "/tmp",
     "--tmpfs", "/app",   
+    # "--tmpfs", "/app:rw,uid=65534,gid=65534",
     "--network", "none",
+    "--user", "nobody",
+    "--cap-drop", "ALL",
     "--security-opt", "no-new-privileges",
     "python:3.9",
     "sleep", "infinity"
