@@ -18,35 +18,69 @@ A production-style distributed system that securely executes untrusted user code
 ## System Architecture
 
 ```
-        +-------------+
-        |   Client    |
-        +-------------+
-               |
-               v
-        +-------------+
-        |   FastAPI   |
-        |  (Submit)   |
-        +-------------+
-               |
-               v
-        +-------------+
-        |   Redis     |
-        |   Queue     |
-        +-------------+
-          /    |    \
-         v     v     v
-   +--------+ +--------+ +--------+
-   |Worker 1| |Worker 2| |Worker 3|
-   +--------+ +--------+ +--------+
-         \      |      /
-          v     v     v
-     +----------------------+
-     | Docker Containers    |
-     | code_runner_1..3     |
-     +----------------------+
+                 +-------------+
+                 |    User     |
+                 +-------------+
+                        |
+                        v
+               +----------------+
+               |   FastAPI API  |
+               |   (main.py)    |
+               +----------------+
+                        |
+                        v
+                 +------------+
+                 |   Redis    |
+                 |  (Queue)   |
+                 +------------+
+                        |
+              +---------+----------+
+              |                    |
+              v                    v
+      +---------------+     +---------------+
+      |   Worker 1    |     |   Worker 2    |
+      +---------------+     +---------------+
+              |                    |
+              v                    v
+      +---------------+     +---------------+
+      | Docker Runner |     | Docker Runner |
+      | Container     |     | Container     |
+      +---------------+     +---------------+
+              |
+              v
+      Execute User Code Safely
 ```
-
 ---
+## Architecture
+
+The system consists of several components:
+
+1. FastAPI API Server
+Handles user requests and job submission.
+
+2. Redis Queue
+Stores jobs before execution.
+
+3. Worker Processes
+Consume jobs from the queue and execute them.
+
+4. Docker Containers
+Provide sandboxed environments for running user code.
+
+5. Observability Layer
+Tracks metrics like job success rate, queue size, and execution failures.
+
+## Execution Flow
+
+1. User submits code
+2. API validates request
+3. Job pushed to Redis Queue
+4. Worker picks job
+5. Worker allocates container
+6. Code copied into container
+7. Code executed
+8. Output stored in Redis
+9. User fetches result
 
 ##  Prerequisites
 
