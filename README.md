@@ -51,6 +51,12 @@ A production-style distributed system that securely executes untrusted user code
       Execute User Code Safely
 ```
 ---
+
+## System Architecture
+
+![Project Architecture](project.png)
+
+
 ## Architecture
 
 The system consists of several components:
