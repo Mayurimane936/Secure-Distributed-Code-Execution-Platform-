@@ -7,6 +7,7 @@ from rq import Queue, Retry
 from redis import Redis
 from worker import execute_code
 import json
+from dashboard import router as dashboard_router
 
 app = FastAPI()
 redis_conn = Redis()
@@ -105,3 +106,24 @@ def job_status(job_id: str):
         "exit_reason": job.get("exit_reason", None),
         "timestamp": job.get("timestamp", None)
     }
+
+
+@app.get("/health/workers")
+def worker_health():
+    worker_keys = redis_conn.keys("worker:*")
+    workers = []
+    for key in worker_keys:
+        worker_id = key.decode().split(":")[1]
+        last_seen = int(redis_conn.get(key))
+
+        workers.append({
+            "worker_id": worker_id,
+            "last_seen": last_seen,
+            "status": "alive"
+        })
+    return {
+        "workers_active": len(workers),
+        "workers": workers
+    }
+
+app.include_router(dashboard_router)

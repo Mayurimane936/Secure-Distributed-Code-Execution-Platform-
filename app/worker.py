@@ -74,13 +74,18 @@ def release_container(container_name):
 def execute_code(job_data):
     start_time = time.time()
     job_id = job_data["job_id"]
+    redis_conn.incr("metrics:jobs_total")
     code = job_data["code"]
     user_ip = job_data["user_ip"]
     user_job_key = f"user_jobs:{user_ip}"
 
+    current_minute = int(time.time() / 60)
+    redis_conn.incr(f"metrics:jobs_minute:{current_minute}")
+
     status = "error"
     output = ""
     error = ""
+    exit_reason = "unknown"
 
     container_name = None  # for safety
 
@@ -162,6 +167,7 @@ def execute_code(job_data):
         status = "completed"
         output = result.stdout
         error = ""
+        redis_conn.incr("metrics:jobs_completed")
 
     except subprocess.TimeoutExpired:
         print(" Timeout occurred")
@@ -176,10 +182,12 @@ def execute_code(job_data):
             capture_output=True
         )
         # raise Exception("Execution timed out")
+        redis_conn.incr("metrics:jobs_timeout")
 
     except Exception as e:
         exit_reason = "error"
         print(" Exception:", str(e))
+        redis_conn.incr("metrics:jobs_failed")
         raise e  # IMPORTANT for retry
 
     finally:
