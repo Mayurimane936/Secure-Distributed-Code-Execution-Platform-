@@ -5,13 +5,13 @@ A production-style distributed system that securely executes untrusted user code
 
 ## Key Features
 
-* 🐳 Docker-based isolated execution
-* 🔒 Atomic container locking using Redis
-* 💓 Worker heartbeat monitoring (failure detection)
-* ⚡ Distributed workers using RQ (Redis Queue)
-* 🧹 Auto container cleanup before/after execution
-* ⛔ Secure sandbox (no network, limited CPU/memory)
-* 🔁 Retry mechanism for failed jobs
+*  Docker-based isolated execution
+*  Atomic container locking using Redis
+*  Worker heartbeat monitoring (failure detection)
+*  Distributed workers using RQ (Redis Queue)
+*  Auto container cleanup before/after execution
+*  Secure sandbox (no network, limited CPU/memory)
+*  Retry mechanism for failed jobs
 
 ---
 
