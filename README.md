@@ -1,4 +1,4 @@
-# 🚀 Distributed Secure Code Execution Platform
+# Distributed Secure Code Execution Platform
 
 A production-style distributed system that securely executes untrusted user code using Docker containers, Redis queues, and worker orchestration.
 
