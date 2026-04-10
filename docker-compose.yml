@@ -1,0 +1,89 @@
+version: "3.9"
+
+services:
+
+  redis:
+    image: redis:7-alpine
+    container_name: code-execution-redis
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+
+  api:
+    build: .
+    container_name: code-execution-api
+    ports:
+      - "8000:8000"
+    depends_on:
+      - redis
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_URL=redis://redis:6379
+      - PYTHONPATH=/app
+    restart: unless-stopped
+
+  worker:
+    build: .
+    container_name: code-execution-worker
+    command: rq worker
+    depends_on:
+      - redis
+      - code_runner_1
+      - code_runner_2
+      - code_runner_3
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_URL=redis://redis:6379
+      - PYTHONPATH=/app
+      - CONTAINERS=code_runner_1,code_runner_2,code_runner_3
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    restart: unless-stopped
+
+  code_runner_1:
+    image: python:3.9
+    container_name: code_runner_1
+    command: sleep infinity
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /app
+    network_mode: none
+    user: nobody
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges
+    restart: unless-stopped
+
+  code_runner_2:
+    image: python:3.9
+    container_name: code_runner_2
+    command: sleep infinity
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /app
+    network_mode: none
+    user: nobody
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges
+    restart: unless-stopped
+
+  code_runner_3:
+    image: python:3.9
+    container_name: code_runner_3
+    command: sleep infinity
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /app
+    network_mode: none
+    user: nobody
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges
+    restart: unless-stopped

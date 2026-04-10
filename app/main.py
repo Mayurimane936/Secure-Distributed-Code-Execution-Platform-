@@ -5,7 +5,7 @@ import os
 import subprocess
 from rq import Queue, Retry
 from redis import Redis
-from worker import execute_code
+from app.worker.worker import execute_code
 import json
 from api.dashboard import router as dashboard_router
 from utils import store_code_to_file
@@ -72,7 +72,7 @@ def submit_code(request_data: CodeSubmission, request: Request):
     }))
     redis_conn.incr(user_job_key)
     queue.enqueue(
-        "worker.execute_code",
+        "app.worker.worker.execute_code",
         {"job_id": job_id, "code": request_data.code, "user_ip": client_ip},
         retry=Retry(max=config.retry_max, interval=config.retry_intervals)
     )
