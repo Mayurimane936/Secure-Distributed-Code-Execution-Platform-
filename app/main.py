@@ -9,10 +9,12 @@ from worker import execute_code
 import json
 from api.dashboard import router as dashboard_router
 from utils import store_code_to_file
+from config import Config
 
+config = Config()
 app = FastAPI()
-redis_conn = Redis()
-queue = Queue(connection=redis_conn)
+redis_conn = Redis(host=config.redis_host, port=config.redis_port, db=config.redis_db)
+queue = Queue(config.rq_queue_name, connection=redis_conn)
 
 class CodeSubmission(BaseModel):
     code: str
@@ -40,7 +42,7 @@ def submit_code(request_data: CodeSubmission, request: Request):
     if request_count == 1:
         redis_conn.expire(rate_key, 60)
     
-    if request_count>10:
+    if request_count > config.rate_limit_per_minute:
         return {
             "error": "Rate limit exceeded. Try again later"
         }
@@ -48,9 +50,9 @@ def submit_code(request_data: CodeSubmission, request: Request):
     if not request_data.code:
         return {"error": "Code cannot be empty"}
 
-    if running_jobs>=2:
+    if running_jobs >= config.max_concurrent_jobs:
         return {
-            "error": "Concurrency limit exceeded. Max 2 running jobs per user."
+            "error": f"Concurrency limit exceeded. Max {config.max_concurrent_jobs} running jobs per user."
         }
         print(f"Concurrency limit exceeded for {client_ip}")
 
@@ -69,7 +71,11 @@ def submit_code(request_data: CodeSubmission, request: Request):
     "error": ""
     }))
     redis_conn.incr(user_job_key)
-    queue.enqueue("worker.execute_code", {"job_id": job_id, "code": request_data.code, "user_ip":client_ip},  retry=Retry(max=3, interval=[5, 10, 20]))
+    queue.enqueue(
+        "worker.execute_code",
+        {"job_id": job_id, "code": request_data.code, "user_ip": client_ip},
+        retry=Retry(max=config.retry_max, interval=config.retry_intervals)
+    )
     return {
         "job_id": job_id,
         "status": "queued"

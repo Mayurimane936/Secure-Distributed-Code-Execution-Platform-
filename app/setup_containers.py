@@ -1,12 +1,17 @@
 import subprocess
+from config import Config
+
+config = Config()
 
 # Start Redis container
-subprocess.run(["docker", "rm", "-f", "redis-server"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+subprocess.run(["docker", "rm", "-f", config.redis_container_name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 subprocess.run([
-    "docker", "run", "-d", "--name", "redis-server", "-p", "6379:6379", "redis:alpine"
+    "docker", "run", "-d", "--name", config.redis_container_name,
+    "-p", config.redis_port_map,
+    config.redis_image
 ])
 
-containers = ["code_runner_1", "code_runner_2", "code_runner_3"]
+containers = config.containers
 
 for c in containers:
     # Remove if exists
@@ -16,18 +21,18 @@ for c in containers:
     subprocess.run([
     "docker", "run", "-dit",
     "--name", c,
-    "--memory=100m",
-    "--cpus=0.5",
-    "--pids-limit=50",
+    "--memory", config.container_memory,
+    "--cpus", config.container_cpus,
+    "--pids-limit", str(config.container_pids_limit),
     "--read-only",
     "--tmpfs", "/tmp",
     "--tmpfs", "/app",   
     # "--tmpfs", "/app:rw,uid=65534,gid=65534",
     "--network", "none",
-    "--user", "nobody",
+    "--user", config.container_user,
     "--cap-drop", "ALL",
     "--security-opt", "no-new-privileges",
-    "python:3.9",
+    config.docker_image,
     "sleep", "infinity"
     ])
 

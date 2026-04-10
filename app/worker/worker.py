@@ -6,16 +6,17 @@ import uuid
 import threading
 from redis import Redis
 from rq import Queue
-import os
 import sys
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from utils import store_code_to_file
 # from app.utils import store_code_to_file
 import random
+from config import Config
 
-containers = ["code_runner_1", "code_runner_2", "code_runner_3"]
+config = Config()
+containers = config.containers
 
-redis_conn = Redis(host='localhost', port=6379)
+redis_conn = Redis(host=config.redis_host, port=config.redis_port, db=config.redis_db)
 queue = Queue(connection=redis_conn)
 
 # Unique worker ID
@@ -150,7 +151,7 @@ def execute_code(job_data):
             ["docker", "exec", container_name, "python", container_file],
             capture_output=True,
             text=True,
-            timeout=5
+            timeout=config.worker_timeout_seconds
         )
 
         print("RETURN CODE:", result.returncode)
