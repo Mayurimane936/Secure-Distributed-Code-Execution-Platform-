@@ -11,7 +11,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from utils import store_code_to_file
 # from app.utils import store_code_to_file
 import random
-from config import Config
+from env_config.config import Config
 
 config = Config()
 containers = config.containers

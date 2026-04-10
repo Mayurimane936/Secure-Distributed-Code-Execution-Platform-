@@ -9,7 +9,7 @@ from worker import execute_code
 import json
 from api.dashboard import router as dashboard_router
 from utils import store_code_to_file
-from config import Config
+from env_config.config import Config
 
 config = Config()
 app = FastAPI()
