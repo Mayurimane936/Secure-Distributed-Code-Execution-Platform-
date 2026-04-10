@@ -7,7 +7,8 @@ from rq import Queue, Retry
 from redis import Redis
 from worker import execute_code
 import json
-from dashboard import router as dashboard_router
+from api.dashboard import router as dashboard_router
+from utils import store_code_to_file
 
 app = FastAPI()
 redis_conn = Redis()
@@ -17,17 +18,6 @@ class CodeSubmission(BaseModel):
     code: str
 
 jobs = {}
-
-# Base + Data directory (correct)
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DATA_DIR = os.path.join(BASE_DIR, "data")
-
-def store_code_to_file(code, job_id):
-    os.makedirs(DATA_DIR, exist_ok=True)
-    file_path = os.path.join(DATA_DIR, f"{job_id}_usercode.py")
-    with open(file_path, "w") as f:
-        f.write(code)
-    return file_path
 
 
 @app.get("/")

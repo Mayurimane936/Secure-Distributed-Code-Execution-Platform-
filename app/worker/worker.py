@@ -4,12 +4,14 @@ import json
 import time
 import uuid
 import threading
-
 from redis import Redis
 from rq import Queue
+import os
+import sys
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from utils import store_code_to_file
+# from app.utils import store_code_to_file
 import random
-
 
 containers = ["code_runner_1", "code_runner_2", "code_runner_3"]
 
