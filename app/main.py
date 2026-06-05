@@ -7,9 +7,9 @@ from rq import Queue, Retry
 from redis import Redis
 from app.worker.worker import execute_code
 import json
-from api.dashboard import router as dashboard_router
-from utils import store_code_to_file
-from env_config.config import Config
+from app.api.dashboard import router as dashboard_router
+from app.utils import store_code_to_file
+from app.env_config.config import Config
 
 config = Config()
 app = FastAPI()

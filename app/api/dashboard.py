@@ -1,7 +1,7 @@
 import redis
 from fastapi import FastAPI, APIRouter
 from datetime import datetime, timedelta
-from env_config.config import Config
+from app.env_config.config import Config
 
 config = Config()
 router = APIRouter()

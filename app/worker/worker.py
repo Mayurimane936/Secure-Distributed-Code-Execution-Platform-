@@ -7,11 +7,12 @@ import threading
 from redis import Redis
 from rq import Queue
 import sys
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-from utils import store_code_to_file
+ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+sys.path.insert(0, ROOT_DIR)
+from app.utils import store_code_to_file
 # from app.utils import store_code_to_file
 import random
-from env_config.config import Config
+from app.env_config.config import Config
 
 config = Config()
 containers = config.containers
