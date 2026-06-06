@@ -23,9 +23,7 @@ queue = Queue(connection=redis_conn)
 # Unique worker ID
 worker_id = str(uuid.uuid4())
 
-# -----------------------------
 # HEARTBEAT FUNCTION
-# -----------------------------
 def send_heartbeat():
     while True:
         redis_conn.set(
@@ -36,9 +34,7 @@ def send_heartbeat():
         print(f" Heartbeat from {worker_id}")
         time.sleep(3)
 
-# -----------------------------
 # ATOMIC LOCKING
-# -----------------------------
 def get_free_container():
     while True:
         random.shuffle(containers)
@@ -60,9 +56,8 @@ def get_free_container():
         print("Waiting for free container...")
         time.sleep(1)
 
-# -----------------------------
+
 # RELEASE LOCK
-# -----------------------------
 def release_container(container_name):
     lock_key = f"lock:{container_name}"
 
@@ -72,9 +67,7 @@ def release_container(container_name):
         redis_conn.delete(lock_key)
         print(f" Released {container_name}")
 
-# -----------------------------
 # MAIN EXECUTION FUNCTION
-# -----------------------------
 def execute_code(job_data):
     start_time = time.time()
     job_id = job_data["job_id"]
@@ -223,9 +216,8 @@ def execute_code(job_data):
         "timestamp": int(time.time())
     }
 
-# -----------------------------
+
 # START WORKER
-# -----------------------------
 if __name__ == "__main__":
     from rq import Worker
 
