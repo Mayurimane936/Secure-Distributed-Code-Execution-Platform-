@@ -1,5 +1,6 @@
-from fastapi import FastAPI, Request
-from pydantic import BaseModel
+from fastapi import FastAPI, Request, HTTPException, status
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field
 import uuid
 import os
 import subprocess
@@ -17,7 +18,22 @@ redis_conn = Redis(host=config.redis_host, port=config.redis_port, db=config.red
 queue = Queue(config.rq_queue_name, connection=redis_conn)
 
 class CodeSubmission(BaseModel):
-    code: str
+    code: str = Field(
+        ..., 
+        min_length=1,
+        max_length=config.max_code_length,
+        description="Python code to execute",
+    )
+    language: str = Field(
+        "python",
+        description="Execution language",
+    )
+    timeout_seconds: int = Field(
+        config.worker_timeout_seconds,
+        ge=1,
+        le=config.max_timeout_seconds,
+        description="Maximum execution timeout in seconds",
+    )
 
 jobs = {}
 
@@ -43,43 +59,57 @@ def submit_code(request_data: CodeSubmission, request: Request):
         redis_conn.expire(rate_key, 60)
     
     if request_count > config.rate_limit_per_minute:
-        return {
-            "error": "Rate limit exceeded. Try again later"
-        }
-        print(f"Rate limit exceeded for {client_ip}")
-    if not request_data.code:
-        return {"error": "Code cannot be empty"}
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Rate limit exceeded. Try again later.",
+        )
 
     if running_jobs >= config.max_concurrent_jobs:
-        return {
-            "error": f"Concurrency limit exceeded. Max {config.max_concurrent_jobs} running jobs per user."
-        }
-        print(f"Concurrency limit exceeded for {client_ip}")
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=(
+                f"Concurrency limit exceeded. Max {config.max_concurrent_jobs} "
+                "running jobs per user."
+            ),
+        )
 
+
+    if request_data.language not in config.supported_languages:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"Unsupported language '{request_data.language}'. "
+                f"Supported languages: {config.supported_languages}"
+            ),
+        )
 
     job_id = str(uuid.uuid4())
 
-    # jobs[job_id] = {
-    # "status": "pending",
-    # "output": "",
-    # "error": ""
-    # }
-
     redis_conn.set(job_id, json.dumps({
-    "status": "pending",
-    "output": "",
-    "error": ""
+        "status": "pending",
+        "output": "",
+        "error": ""
     }))
     redis_conn.incr(user_job_key)
     queue.enqueue(
         "app.worker.worker.execute_code",
-        {"job_id": job_id, "code": request_data.code, "user_ip": client_ip},
+        {
+            "job_id": job_id,
+            "code": request_data.code,
+            "user_ip": client_ip,
+            "timeout_seconds": request_data.timeout_seconds,
+        },
         retry=Retry(max=config.retry_max, interval=config.retry_intervals)
     )
-    return {
-        "job_id": job_id,
-        "status": "queued"
-    }
+    return JSONResponse(
+        status_code=status.HTTP_201_CREATED,
+        content={
+            "job_id": job_id,
+            "status": "queued",
+            "language": request_data.language,
+            "timeout_seconds": request_data.timeout_seconds,
+        },
+    )
 
     
 @app.get("/job-status/{job_id}")

@@ -141,49 +141,56 @@ def execute_code(job_data):
         #     raise Exception(cp_result.stderr)
 
         # 4️ Execute code
+        timeout_seconds = int(job_data.get("timeout_seconds", config.worker_timeout_seconds))
+        timeout_seconds = min(timeout_seconds, config.max_timeout_seconds)
+
         result = subprocess.run(
             ["docker", "exec", container_name, "python", container_file],
             capture_output=True,
             text=True,
-            timeout=config.worker_timeout_seconds
+            timeout=timeout_seconds,
         )
 
         print("RETURN CODE:", result.returncode)
         print("STDOUT:", result.stdout)
         print("STDERR:", result.stderr)
 
-        # 5️ Raise error for retry system
         if result.returncode != 0:
-            raise Exception(result.stderr)
-
-        # 6️ Cleanup file inside container
-        subprocess.run(
-            ["docker", "exec", container_name, "rm", "-f", container_file]
-        )
-        exit_reason = "success" if result.returncode == 0 else "error"
-        status = "completed"
-        output = result.stdout
-        error = ""
-        redis_conn.incr("metrics:jobs_completed")
+            error = result.stderr.strip() or result.stdout.strip() or f"Process exited with code {result.returncode}"
+            status = "failed"
+            exit_reason = "runtime_error"
+            output = result.stdout
+            redis_conn.incr("metrics:jobs_failed")
+        else:
+            # 6️ Cleanup file inside container
+            subprocess.run(
+                ["docker", "exec", container_name, "rm", "-f", container_file]
+            )
+            exit_reason = "success"
+            status = "completed"
+            output = result.stdout
+            error = ""
+            redis_conn.incr("metrics:jobs_completed")
 
     except subprocess.TimeoutExpired:
         print(" Timeout occurred")
         exit_reason = "timeout"
         status = "timeout"
         output = ""
-        error = "Code execution exceeded time limit (5 seconds)"
+        error = f"Code execution exceeded time limit ({timeout_seconds} seconds)"
 
         # Kill python process if still running
         subprocess.run(
             ["docker", "exec", container_name, "pkill", "-f", "python"],
             capture_output=True
         )
-        # raise Exception("Execution timed out")
         redis_conn.incr("metrics:jobs_timeout")
 
     except Exception as e:
-        exit_reason = "error"
-        print(" Exception:", str(e))
+        exit_reason = "internal_error"
+        status = "error"
+        error = str(e)
+        print(" Exception:", error)
         redis_conn.incr("metrics:jobs_failed")
         raise e  # IMPORTANT for retry
 

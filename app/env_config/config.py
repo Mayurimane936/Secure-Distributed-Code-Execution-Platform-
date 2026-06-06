@@ -55,3 +55,10 @@ class Config:
         item_type=int,
     )
     rq_queue_name: str = os.getenv("RQ_QUEUE_NAME", "default")
+
+    supported_languages: List[str] = parse_list(
+        os.getenv("SUPPORTED_LANGUAGES"),
+        ["python"],
+    )
+    max_code_length: int = parse_int(os.getenv("MAX_CODE_LENGTH"), 10000)
+    max_timeout_seconds: int = parse_int(os.getenv("MAX_TIMEOUT_SECONDS"), 10)
