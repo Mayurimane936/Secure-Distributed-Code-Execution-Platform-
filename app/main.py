@@ -1,21 +1,33 @@
 from fastapi import FastAPI, Request, HTTPException, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
-import uuid
-import os
-import subprocess
 from rq import Queue, Retry
 from redis import Redis
-from app.worker.worker import execute_code
+import uuid
 import json
 from app.api.dashboard import router as dashboard_router
-from app.utils import store_code_to_file
 from app.env_config.config import Config
 
 config = Config()
 app = FastAPI()
-redis_conn = Redis(host=config.redis_host, port=config.redis_port, db=config.redis_db)
-queue = Queue(config.rq_queue_name, connection=redis_conn)
+
+
+@app.on_event("startup")
+def startup_event():
+    app.state.redis_conn = Redis(
+        host=config.redis_host,
+        port=config.redis_port,
+        db=config.redis_db,
+    )
+    app.state.queue = Queue(config.rq_queue_name, connection=app.state.redis_conn)
+
+
+@app.on_event("shutdown")
+def shutdown_event():
+    redis_conn = getattr(app.state, "redis_conn", None)
+    if redis_conn is not None:
+        redis_conn.close()
+
 
 class CodeSubmission(BaseModel):
     code: str = Field(
@@ -35,29 +47,36 @@ class CodeSubmission(BaseModel):
         description="Maximum execution timeout in seconds",
     )
 
-jobs = {}
+
+def get_client_ip(request: Request) -> str:
+    if request.client and request.client.host:
+        return request.client.host
+    forwarded = request.headers.get("X-Forwarded-For")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return "unknown"
 
 
 @app.get("/")
 def home():
     return {"message": "Secure Code Execution Platform 🚀"}
 
+
 @app.post("/submit-code")
 def submit_code(request_data: CodeSubmission, request: Request):
-    # rate limiting per client IP
-    client_ip = request.client.host
+    redis_conn = app.state.redis_conn
+    queue = app.state.queue
+
+    client_ip = get_client_ip(request)
     rate_key = f"rate_limit:{client_ip}"
     request_count = redis_conn.incr(rate_key)
 
-    # concurrency limit per IP
-    user_job_key = f"user_jobs:{client_ip}"
-
-    running_jobs = redis_conn.get(user_job_key)
-    running_jobs = int(running_jobs) if running_jobs else 0
-
     if request_count == 1:
         redis_conn.expire(rate_key, 60)
-    
+
+    user_job_key = f"user_jobs:{client_ip}"
+    running_jobs = int(redis_conn.get(user_job_key) or 0)
+
     if request_count > config.rate_limit_per_minute:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
@@ -73,7 +92,6 @@ def submit_code(request_data: CodeSubmission, request: Request):
             ),
         )
 
-
     if request_data.language not in config.supported_languages:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -84,23 +102,24 @@ def submit_code(request_data: CodeSubmission, request: Request):
         )
 
     job_id = str(uuid.uuid4())
-
     redis_conn.set(job_id, json.dumps({
         "status": "pending",
         "output": "",
-        "error": ""
+        "error": "",
     }))
+    redis_conn.expire(job_id, 500)
     redis_conn.incr(user_job_key)
+    redis_conn.expire(user_job_key, config.max_timeout_seconds * 3)
+
     queue.enqueue(
         "app.worker.worker.execute_code",
-        {
-            "job_id": job_id,
-            "code": request_data.code,
-            "user_ip": client_ip,
-            "timeout_seconds": request_data.timeout_seconds,
-        },
-        retry=Retry(max=config.retry_max, interval=config.retry_intervals)
+        job_id,
+        request_data.code,
+        client_ip,
+        request_data.timeout_seconds,
+        retry=Retry(max=config.retry_max, interval=config.retry_intervals),
     )
+
     return JSONResponse(
         status_code=status.HTTP_201_CREATED,
         content={
@@ -111,45 +130,69 @@ def submit_code(request_data: CodeSubmission, request: Request):
         },
     )
 
-    
+
 @app.get("/job-status/{job_id}")
 def job_status(job_id: str):
+    redis_conn = app.state.redis_conn
     job_data = redis_conn.get(job_id)
 
     if not job_data:
-        return {"error": "Job not found"}
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Job not found",
+        )
 
-    # Convert bytes → string → dict
     job = json.loads(job_data.decode("utf-8"))
 
     return {
         "job_id": job_id,
         "status": job["status"],
-        "output": job["output"],
+        "output": job.get("output", ""),
+        "debug_output": job.get("debug_output", ""),
         "error": job["error"],
-        "execution_time": job.get("execution_time", None),
-        "container_name": job.get("container_name", None),
-        "exit_reason": job.get("exit_reason", None),
-        "timestamp": job.get("timestamp", None)
+        "execution_time": job.get("execution_time"),
+        "container_name": job.get("container_name"),
+        "exit_reason": job.get("exit_reason"),
+        "timestamp": job.get("timestamp"),
     }
+
+
+@app.get("/health/live")
+def health_live():
+    return {"status": "alive"}
+
+
+@app.get("/health/ready")
+def health_ready():
+    redis_conn = app.state.redis_conn
+    try:
+        redis_conn.ping()
+        return {"status": "ready"}
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Redis not available",
+        )
 
 
 @app.get("/health/workers")
 def worker_health():
+    redis_conn = app.state.redis_conn
     worker_keys = redis_conn.keys("worker:*")
     workers = []
     for key in worker_keys:
         worker_id = key.decode().split(":")[1]
-        last_seen = int(redis_conn.get(key))
+        last_seen = int(redis_conn.get(key) or 0)
 
         workers.append({
             "worker_id": worker_id,
             "last_seen": last_seen,
-            "status": "alive"
+            "status": "alive",
         })
     return {
         "workers_active": len(workers),
-        "workers": workers
+        "workers": workers,
     }
+
 
 app.include_router(dashboard_router)

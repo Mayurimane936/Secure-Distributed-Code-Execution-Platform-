@@ -1,238 +1,189 @@
-import os
 import subprocess
 import json
 import time
 import uuid
 import threading
-from redis import Redis
-from rq import Queue
-import sys
-ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-sys.path.insert(0, ROOT_DIR)
-from app.utils import store_code_to_file
-# from app.utils import store_code_to_file
+import logging
 import random
+from redis import Redis
 from app.env_config.config import Config
 
 config = Config()
-containers = config.containers
-
 redis_conn = Redis(host=config.redis_host, port=config.redis_port, db=config.redis_db)
-queue = Queue(connection=redis_conn)
 
-# Unique worker ID
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+)
+logger = logging.getLogger(__name__)
+
 worker_id = str(uuid.uuid4())
+CONTAINER_POOL = config.containers  # e.g., ["code_runner_1", "code_runner_2", "code_runner_3"]
 
-# HEARTBEAT FUNCTION
+
 def send_heartbeat():
     while True:
-        redis_conn.set(
-            f"worker:{worker_id}",
-            int(time.time()),
-            ex=10  # expires if worker dies
-        )
-        print(f" Heartbeat from {worker_id}")
+        try:
+            redis_conn.set(
+                f"worker:{worker_id}",
+                int(time.time()),
+                ex=10,
+            )
+            logger.debug("Heartbeat from %s", worker_id)
+        except Exception:
+            logger.exception("Worker heartbeat failed")
         time.sleep(3)
 
-# ATOMIC LOCKING
-def get_free_container():
-    while True:
-        random.shuffle(containers)
-        for c in containers:
-            lock_key = f"lock:{c}"
 
-            # Atomic lock
-            is_locked = redis_conn.set(
-                lock_key,
-                worker_id,
-                nx=True,
-                ex=30
-            )
-
-            if is_locked:
-                print(f" Locked container {c}")
-                return c
-
-        print("Waiting for free container...")
-        time.sleep(1)
-
-
-# RELEASE LOCK
-def release_container(container_name):
-    lock_key = f"lock:{container_name}"
-
-    current_owner = redis_conn.get(lock_key)
-
-    if current_owner and current_owner.decode() == worker_id:
-        redis_conn.delete(lock_key)
-        print(f" Released {container_name}")
-
-# MAIN EXECUTION FUNCTION
-def execute_code(job_data):
+def execute_code(job_id, code, user_ip, timeout_seconds=None):
     start_time = time.time()
-    job_id = job_data["job_id"]
     redis_conn.incr("metrics:jobs_total")
-    code = job_data["code"]
-    user_ip = job_data["user_ip"]
-    user_job_key = f"user_jobs:{user_ip}"
-
     current_minute = int(time.time() / 60)
     redis_conn.incr(f"metrics:jobs_minute:{current_minute}")
+
+    user_job_key = f"user_jobs:{user_ip}"
+    timeout_seconds = int(timeout_seconds or config.worker_timeout_seconds)
+    timeout_seconds = min(timeout_seconds, config.max_timeout_seconds)
 
     status = "error"
     output = ""
     error = ""
     exit_reason = "unknown"
+    container_name = None
 
-    container_name = None  # for safety
+    # Select container from pool (round-robin or random)
+    selected_container = random.choice(CONTAINER_POOL)
+    container_lock_key = f"container_lock:{selected_container}"
 
     try:
-        redis_conn.set(job_id, json.dumps({
-            "status": "running",
-            "output": "",
-            "error": ""
-        }))
-        # 1️ Lock container
-        container_name = get_free_container()
+        # Acquire lock for the container to ensure sequential execution
+        lock_acquired = False
+        lock_wait_time = 0
+        max_wait = 30  # Max 30 seconds to acquire lock
 
-        # 2️ Store the code
-        file_path = store_code_to_file(code, job_id)
-        container_file = f"/tmp/{job_id}.py"
+        while lock_wait_time < max_wait:
+            if redis_conn.set(container_lock_key, job_id, nx=True, ex=timeout_seconds + 10):
+                lock_acquired = True
+                break
+            time.sleep(0.1)
+            lock_wait_time += 0.1
 
-        #  Clean container before use
-        cleanup = subprocess.run(
-            ["docker", "exec", container_name, "sh", "-c", "rm -f /tmp/*.py"],
-            capture_output=True,
-            text=True
-        )
+        if not lock_acquired:
+            logger.error("Job %s failed to acquire lock for container %s", job_id, selected_container)
+            status = "error"
+            error = f"Failed to acquire container lock for {selected_container}"
+            exit_reason = "lock_timeout"
+            redis_conn.incr("metrics:jobs_failed")
+            return
 
-        if cleanup.returncode != 0:
-            print("Container unhealthy. Restarting...")
+        container_name = selected_container
 
-            subprocess.run(["docker", "restart", container_name])
+        # Clean container state before execution
+        cleanup_cmd = [
+            "docker", "exec", container_name,
+            "sh", "-c", "rm -rf /tmp/* /app/*"
+        ]
+        try:
+            subprocess.run(cleanup_cmd, capture_output=True, timeout=5, text=True)
+            logger.debug("Cleaned container %s state", container_name)
+        except Exception as e:
+            logger.warning("Failed to clean container %s: %s", container_name, e)
 
-            time.sleep(1)
-            # raise Exception(f"Cleanup failed: {cleanup.stderr}")
+        # Write code to container and execute
+        docker_command = [
+            "docker", "exec", "-i", container_name,
+            "sh", "-c",
+            f"cat > /tmp/{job_id}.py && python -u /tmp/{job_id}.py"
+        ]
 
-        # 3️ Copy file to container
-        # cp_result = subprocess.run(
-        #     ["docker", "cp", file_path, f"{container_name}:{container_file}"],
-        #     capture_output=True,
-        #     text=True
-        # )
-        # 3️ Write file directly inside container (FIXED)
-        with open(file_path, "r") as f:
-            code_content = f.read()
-
-        write_result = subprocess.run(
-            [
-                "docker", "exec", "-i", container_name,
-                "sh", "-c", f"cat > {container_file}"
-            ],
-            input=code_content,
-            text=True,
-            capture_output=True
-        )
-
-        if write_result.returncode != 0:
-            raise Exception(f"File write failed: {write_result.stderr}")
-
-        # if cp_result.returncode != 0:
-        #     raise Exception(cp_result.stderr)
-
-        # 4️ Execute code
-        timeout_seconds = int(job_data.get("timeout_seconds", config.worker_timeout_seconds))
-        timeout_seconds = min(timeout_seconds, config.max_timeout_seconds)
-
+        logger.info("Executing job %s in pooled container %s", job_id, container_name)
         result = subprocess.run(
-            ["docker", "exec", container_name, "python", container_file],
-            capture_output=True,
+            docker_command,
+            input=code,
             text=True,
+            capture_output=True,
             timeout=timeout_seconds,
         )
 
-        print("RETURN CODE:", result.returncode)
-        print("STDOUT:", result.stdout)
-        print("STDERR:", result.stderr)
+        logger.info("Job %s exited with code %s", job_id, result.returncode)
+        logger.debug("stdout=%s", result.stdout)
+        logger.debug("stderr=%s", result.stderr)
 
+        debug_output = result.stderr or ""
         if result.returncode != 0:
-            error = result.stderr.strip() or result.stdout.strip() or f"Process exited with code {result.returncode}"
             status = "failed"
             exit_reason = "runtime_error"
             output = result.stdout
+            error = result.stderr.strip() or result.stdout.strip() or f"Process exited with code {result.returncode}"
             redis_conn.incr("metrics:jobs_failed")
         else:
-            # 6️ Cleanup file inside container
-            subprocess.run(
-                ["docker", "exec", container_name, "rm", "-f", container_file]
-            )
-            exit_reason = "success"
             status = "completed"
+            exit_reason = "success"
             output = result.stdout
             error = ""
             redis_conn.incr("metrics:jobs_completed")
 
     except subprocess.TimeoutExpired:
-        print(" Timeout occurred")
+        logger.warning("Job %s timed out after %s seconds in %s", job_id, timeout_seconds, container_name)
         exit_reason = "timeout"
         status = "timeout"
         output = ""
         error = f"Code execution exceeded time limit ({timeout_seconds} seconds)"
-
-        # Kill python process if still running
-        subprocess.run(
-            ["docker", "exec", container_name, "pkill", "-f", "python"],
-            capture_output=True
-        )
         redis_conn.incr("metrics:jobs_timeout")
-
-    except Exception as e:
+    except Exception as exc:
+        logger.exception("Job %s failed with internal error in %s", job_id, container_name)
         exit_reason = "internal_error"
         status = "error"
-        error = str(e)
-        print(" Exception:", error)
+        error = str(exc)
         redis_conn.incr("metrics:jobs_failed")
-        raise e  # IMPORTANT for retry
-
     finally:
-        # Always release container
+        # Release container lock
         if container_name:
-            release_container(container_name)
-        redis_conn.decr(user_job_key)
-        execution_time = round(time.time() - start_time, 3)
+            try:
+                redis_conn.delete(f"container_lock:{container_name}")
+                logger.debug("Released lock for container %s", container_name)
+            except Exception:
+                logger.exception("Failed to release container lock for %s", container_name)
 
-        # Store result
+        try:
+            redis_conn.decr(user_job_key)
+        except Exception:
+            logger.exception("Failed to decrement active job counter for %s", user_ip)
+
+        execution_time = round(time.time() - start_time, 3)
         redis_conn.set(job_id, json.dumps({
             "status": status,
             "output": output,
             "error": error,
+            "debug_output": debug_output if 'debug_output' in locals() else "",
             "execution_time": execution_time,
             "container_name": container_name,
             "exit_reason": exit_reason,
-            "timestamp": int(time.time())
+            "timestamp": int(time.time()),
         }))
+        redis_conn.expire(job_id, 500)
 
     return {
         "job_id": job_id,
         "status": status,
         "output": output,
         "error": error,
-        "execution_time": execution_time,
+        "debug_output": debug_output if 'debug_output' in locals() else "",
+        "execution_time": execution_time if 'execution_time' in locals() else 0,
         "container_name": container_name,
         "exit_reason": exit_reason,
-        "timestamp": int(time.time())
+        "timestamp": int(time.time()),
     }
 
 
-# START WORKER
 if __name__ == "__main__":
-    from rq import Worker
+    from rq import Worker, Queue
 
-    # Start heartbeat thread
     heartbeat_thread = threading.Thread(target=send_heartbeat, daemon=True)
     heartbeat_thread.start()
 
-    print(f" Worker started: {worker_id}")
+    logger.info("Worker started: %s", worker_id)
 
+    queue = Queue(connection=redis_conn)
     worker = Worker([queue], connection=redis_conn)
     worker.work()

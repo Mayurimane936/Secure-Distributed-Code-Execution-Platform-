@@ -1,7 +1,6 @@
 version: "3.9"
 
 services:
-
   redis:
     image: redis:7-alpine
     container_name: code-execution-redis
@@ -10,80 +9,90 @@ services:
     restart: unless-stopped
 
   api:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
     container_name: code-execution-api
     ports:
       - "8000:8000"
-    depends_on:
-      - redis
-    environment:
-      - REDIS_HOST=redis
-      - REDIS_URL=redis://redis:6379
-      - PYTHONPATH=/app
-    restart: unless-stopped
-
-  worker:
-    build: .
-    container_name: code-execution-worker
-    command: rq worker
     depends_on:
       - redis
       - code_runner_1
       - code_runner_2
       - code_runner_3
     environment:
-      - REDIS_HOST=redis
-      - REDIS_URL=redis://redis:6379
-      - PYTHONPATH=/app
-      - CONTAINERS=code_runner_1,code_runner_2,code_runner_3
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REDIS_DB: "0"
+      PYTHONPATH: /app
+      ADMIN_TOKEN: "${ADMIN_TOKEN:-}"
     restart: unless-stopped
 
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    container_name: code-execution-worker
+    command: ["python", "app/worker/worker.py"]
+    depends_on:
+      - redis
+      - code_runner_1
+      - code_runner_2
+      - code_runner_3
+    environment:
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REDIS_DB: "0"
+      PYTHONPATH: /app
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    restart: unless-stopped
+
+  # Container Pool - Persistent execution environments
   code_runner_1:
-    image: python:3.9
+    image: python:3.11-slim
     container_name: code_runner_1
-    command: sleep infinity
-    read_only: true
-    tmpfs:
-      - /tmp
-      - /app
-    network_mode: none
-    user: nobody
+    command: tail -f /dev/null
+    networks:
+      - default
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
     cap_drop:
       - ALL
-    security_opt:
-      - no-new-privileges
-    restart: unless-stopped
+    cap_add:
+      - NET_BIND_SERVICE
+    memory: 256m
+    cpus: "0.5"
 
   code_runner_2:
-    image: python:3.9
+    image: python:3.11-slim
     container_name: code_runner_2
-    command: sleep infinity
-    read_only: true
-    tmpfs:
-      - /tmp
-      - /app
-    network_mode: none
-    user: nobody
+    command: tail -f /dev/null
+    networks:
+      - default
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
     cap_drop:
       - ALL
-    security_opt:
-      - no-new-privileges
-    restart: unless-stopped
+    cap_add:
+      - NET_BIND_SERVICE
+    memory: 256m
+    cpus: "0.5"
 
   code_runner_3:
-    image: python:3.9
+    image: python:3.11-slim
     container_name: code_runner_3
-    command: sleep infinity
-    read_only: true
-    tmpfs:
-      - /tmp
-      - /app
-    network_mode: none
-    user: nobody
+    command: tail -f /dev/null
+    networks:
+      - default
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
     cap_drop:
       - ALL
-    security_opt:
-      - no-new-privileges
-    restart: unless-stopped
+    cap_add:
+      - NET_BIND_SERVICE
+    memory: 256m
+    cpus: "0.5"

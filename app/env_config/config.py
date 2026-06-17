@@ -55,6 +55,7 @@ class Config:
         item_type=int,
     )
     rq_queue_name: str = os.getenv("RQ_QUEUE_NAME", "default")
+    admin_token: str = os.getenv("ADMIN_TOKEN", "")
 
     supported_languages: List[str] = parse_list(
         os.getenv("SUPPORTED_LANGUAGES"),
