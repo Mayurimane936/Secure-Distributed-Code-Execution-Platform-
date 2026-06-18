@@ -39,7 +39,7 @@ function App() {
             const data = JSON.parse(e.data)
             setJobResult(data)
             setStatus(data.status)
-            if (data.status !== 'queued' && data.status !== 'running') {
+            if (data.status !== 'queued' && data.status !== 'running' && data.status !== 'pending') {
               es.close()
               if (intervalId) clearInterval(intervalId)
             }
