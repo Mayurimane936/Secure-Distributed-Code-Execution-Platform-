@@ -161,7 +161,14 @@ def execute_code(job_id, code, user_ip, timeout_seconds=None):
             "exit_reason": exit_reason,
             "timestamp": int(time.time()),
         }))
-        redis_conn.expire(job_id, 500)
+        # Set TTL on job results to avoid unbounded storage in Redis (configurable)
+        try:
+            from app.env_config.config import Config as _Config
+            _cfg = _Config()
+            redis_conn.expire(job_id, _cfg.job_result_ttl)
+        except Exception:
+            # Fallback TTL
+            redis_conn.expire(job_id, 3600)
 
     return {
         "job_id": job_id,

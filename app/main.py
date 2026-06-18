@@ -1,5 +1,6 @@
 from fastapi import FastAPI, Request, HTTPException, status
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
+import asyncio
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from rq import Queue, Retry
@@ -116,7 +117,7 @@ def submit_code(request_data: CodeSubmission, request: Request):
         "output": "",
         "error": "",
     }))
-    redis_conn.expire(job_id, 500)
+    redis_conn.expire(job_id, config.job_result_ttl)
     redis_conn.incr(user_job_key)
     redis_conn.expire(user_job_key, config.max_timeout_seconds * 3)
 
@@ -164,6 +165,44 @@ def job_status(job_id: str):
         "exit_reason": job.get("exit_reason"),
         "timestamp": job.get("timestamp"),
     }
+
+
+@app.get("/events/{job_id}")
+async def job_events(request: Request, job_id: str):
+    """Server-Sent Events endpoint that streams job updates to clients.
+
+    This keeps polling on the server-side (single poll per connected client)
+    and pushes updates when the job state changes, reducing client-side
+    polling commands against Redis.
+    """
+    redis_conn = app.state.redis_conn
+
+    async def event_generator():
+        last_status = None
+        while True:
+            if await request.is_disconnected():
+                break
+            try:
+                job_data = redis_conn.get(job_id)
+                if job_data:
+                    job = json.loads(job_data.decode("utf-8"))
+                    status = job.get("status")
+                    if status != last_status:
+                        last_status = status
+                        payload = json.dumps(job)
+                        yield f"data: {payload}\n\n"
+                        # If finished, close stream after delivering final state
+                        if status not in ("queued", "running", "pending"):
+                            break
+            except Exception:
+                # on error, yield a brief noop to keep connection alive
+                try:
+                    yield "data: {\"error\": \"redis-error\"}\n\n"
+                except Exception:
+                    pass
+            await asyncio.sleep(1)
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 
 @app.get("/health/live")

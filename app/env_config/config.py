@@ -63,3 +63,4 @@ class Config:
     )
     max_code_length: int = parse_int(os.getenv("MAX_CODE_LENGTH"), 10000)
     max_timeout_seconds: int = parse_int(os.getenv("MAX_TIMEOUT_SECONDS"), 10)
+    job_result_ttl: int = parse_int(os.getenv("JOB_RESULT_TTL"), 3600)

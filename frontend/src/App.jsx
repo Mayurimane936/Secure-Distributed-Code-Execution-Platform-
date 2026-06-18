@@ -10,24 +10,57 @@ function App() {
   const [status, setStatus] = useState('idle')
 
   useEffect(() => {
+    let es
     let intervalId
-    if (jobId && status === 'queued') {
+
+    const startFallbackPolling = () => {
       intervalId = setInterval(async () => {
-        const response = await fetch(`/api/job-status/${jobId}`)
-        if (response.ok) {
-          const data = await response.json()
-          setJobResult(data)
-          setStatus(data.status)
-          if (data.status !== 'queued' && data.status !== 'running') {
-            clearInterval(intervalId)
+        try {
+          const response = await fetch(`/api/job-status/${jobId}`)
+          if (response.ok) {
+            const data = await response.json()
+            setJobResult(data)
+            setStatus(data.status)
+            if (data.status !== 'queued' && data.status !== 'running') {
+              clearInterval(intervalId)
+            }
           }
-        } else {
-          clearInterval(intervalId)
-          setError('Failed to fetch job status')
+        } catch (err) {
+          console.error('Polling failed', err)
         }
-      }, 1500)
+      }, 5000) // fallback interval 5s to reduce command usage
     }
-    return () => clearInterval(intervalId)
+
+    if (jobId) {
+      try {
+        es = new EventSource(`/api/events/${jobId}`)
+        es.onmessage = (e) => {
+          try {
+            const data = JSON.parse(e.data)
+            setJobResult(data)
+            setStatus(data.status)
+            if (data.status !== 'queued' && data.status !== 'running') {
+              es.close()
+              if (intervalId) clearInterval(intervalId)
+            }
+          } catch (err) {
+            console.error('Invalid SSE payload', err)
+          }
+        }
+        es.onerror = () => {
+          // If SSE fails, start fallback polling with a longer interval
+          if (es) es.close()
+          startFallbackPolling()
+        }
+      } catch (err) {
+        startFallbackPolling()
+      }
+    }
+
+    return () => {
+      if (es) es.close()
+      if (intervalId) clearInterval(intervalId)
+    }
   }, [jobId, status])
 
   const submitCode = async () => {
