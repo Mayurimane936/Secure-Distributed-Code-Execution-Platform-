@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from rq import Queue, Retry
 from redis import Redis
+import os
 import uuid
 import json
 from app.api.dashboard import router as dashboard_router
@@ -24,11 +25,18 @@ app.add_middleware(
 
 @app.on_event("startup")
 def startup_event():
-    app.state.redis_conn = Redis(
-        host=config.redis_host,
-        port=config.redis_port,
-        db=config.redis_db,
-    )
+    # Prefer a full REDIS_URL (e.g. Upstash) if provided, otherwise use host/port from config
+    redis_url = os.getenv("REDIS_URL")
+    if redis_url:
+        # Redis.from_url supports rediss:// URLs (TLS) used by Upstash
+        app.state.redis_conn = Redis.from_url(redis_url)
+    else:
+        app.state.redis_conn = Redis(
+            host=config.redis_host,
+            port=config.redis_port,
+            db=config.redis_db,
+        )
+
     app.state.queue = Queue(config.rq_queue_name, connection=app.state.redis_conn)
 
 

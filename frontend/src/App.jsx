@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react'
+const API_URL = import.meta.env.VITE_API_URL;
+
 
 function App() {
   const [code, setCode] = useState('print("Hello from frontend")')
@@ -16,7 +18,7 @@ function App() {
     const startFallbackPolling = () => {
       intervalId = setInterval(async () => {
         try {
-          const response = await fetch(`/api/job-status/${jobId}`)
+          const response = await fetch(`${API_URL}/job-status/${jobId}`)
           if (response.ok) {
             const data = await response.json()
             setJobResult(data)
@@ -33,7 +35,7 @@ function App() {
 
     if (jobId) {
       try {
-        es = new EventSource(`/api/events/${jobId}`)
+        es = new EventSource(`${API_URL}/events/${jobId}`)
         es.onmessage = (e) => {
           try {
             const data = JSON.parse(e.data)
@@ -68,7 +70,7 @@ function App() {
     setJobResult(null)
     setStatus('submitting')
 
-    const response = await fetch('/api/submit-code', {
+    const response = await fetch('${API_URL}/submit-code', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
