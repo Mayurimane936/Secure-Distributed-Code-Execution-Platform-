@@ -95,8 +95,9 @@ def execute_code(job_id, code, user_ip, timeout_seconds=None):
             "sh", "-c", "rm -rf /tmp/* /app/*"
         ]
         try:
-            subprocess.run(cleanup_cmd, capture_output=True, timeout=5, text=True)
-            logger.debug("Cleaned container %s state", container_name)
+            if not os.getenv("RENDER"):
+                subprocess.run(cleanup_cmd, capture_output=True, timeout=5, text=True)
+                logger.debug("Cleaned container %s state", container_name)
         except Exception as e:
             logger.warning("Failed to clean container %s: %s", container_name, e)
 
@@ -108,13 +109,23 @@ def execute_code(job_id, code, user_ip, timeout_seconds=None):
         ]
 
         logger.info("Executing job %s in pooled container %s", job_id, container_name)
-        result = subprocess.run(
-            docker_command,
-            input=code,
-            text=True,
-            capture_output=True,
-            timeout=timeout_seconds,
-        )
+        if os.getenv("RENDER"):
+        # Running on Render: execute directly
+            result = subprocess.run(
+                ["python", "-c", code],
+                text=True,
+                capture_output=True,
+                timeout=timeout_seconds,
+            )
+        else:
+        # Local machine: execute inside Docker container
+            result = subprocess.run(
+                docker_command,
+                input=code,
+                text=True,
+                capture_output=True,
+                timeout=timeout_seconds,
+            )
 
         logger.info("Job %s exited with code %s", job_id, result.returncode)
         logger.debug("stdout=%s", result.stdout)
