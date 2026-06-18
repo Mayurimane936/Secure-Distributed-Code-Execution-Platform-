@@ -1,5 +1,5 @@
 #!/bin/sh
 
-python app/worker/worker.py &
+python -m app.worker.worker &
 
 uvicorn app.main:app --host 0.0.0.0 --port 8000
