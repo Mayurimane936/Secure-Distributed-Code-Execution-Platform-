@@ -7,9 +7,20 @@ import logging
 import random
 from redis import Redis
 from app.env_config.config import Config
+import os
 
 config = Config()
-redis_conn = Redis(host=config.redis_host, port=config.redis_port, db=config.redis_db)
+
+redis_url = os.getenv("REDIS_URL")
+
+if redis_url:
+    redis_conn = Redis.from_url(redis_url)
+else:
+    redis_conn = Redis(
+        host=config.redis_host,
+        port=config.redis_port,
+        db=config.redis_db,
+    )
 
 logging.basicConfig(
     level=logging.INFO,
