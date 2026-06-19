@@ -70,7 +70,7 @@ function App() {
     setJobResult(null)
     setStatus('submitting')
 
-    const response = await fetch('${API_URL}/submit-code', {
+    const response = await fetch(`${API_URL}/submit-code`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
