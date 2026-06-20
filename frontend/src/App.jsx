@@ -15,7 +15,6 @@ function App() {
   useEffect(() => {
     let es;
     let intervalId;
-
     const startFallbackPolling = () => {
       intervalId = setInterval(async () => {
         try {
