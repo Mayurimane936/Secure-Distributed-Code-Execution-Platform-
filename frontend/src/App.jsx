@@ -1,221 +1,301 @@
-import { useState, useEffect } from 'react'
-const API_URL = import.meta.env.VITE_API_URL;
 
+import { useState, useEffect } from "react";
+
+const API_URL = import.meta.env.VITE_API_URLL;
 
 function App() {
-  const [code, setCode] = useState('print("Hello from frontend")')
-  const [language, setLanguage] = useState('python')
-  const [timeout, setTimeoutValue] = useState(5)
-  const [jobId, setJobId] = useState('')
-  const [jobResult, setJobResult] = useState(null)
-  const [error, setError] = useState('')
-  const [status, setStatus] = useState('idle')
+  const [code, setCode] = useState('print("Hello from frontend")');
+  const [language, setLanguage] = useState("python");
+  const [timeout, setTimeoutValue] = useState(5);
+  const [jobId, setJobId] = useState("");
+  const [jobResult, setJobResult] = useState(null);
+  const [error, setError] = useState("");
+  const [status, setStatus] = useState("idle");
 
   useEffect(() => {
-    let es
-    let intervalId
+    let es;
+    let intervalId;
 
     const startFallbackPolling = () => {
       intervalId = setInterval(async () => {
         try {
-          const response = await fetch(`${API_URL}/job-status/${jobId}`)
+          const response = await fetch(`${API_URL}/job-status/${jobId}`);
+
           if (response.ok) {
-            const data = await response.json()
-            setJobResult(data)
-            setStatus(data.status)
-            if (data.status !== 'queued' && data.status !== 'running') {
-              clearInterval(intervalId)
+            const data = await response.json();
+            setJobResult(data);
+            setStatus(data.status);
+
+            if (data.status !== "queued" && data.status !== "running") {
+              clearInterval(intervalId);
             }
           }
         } catch (err) {
-          console.error('Polling failed', err)
+          console.error("Polling failed", err);
         }
-      }, 5000) // fallback interval 5s to reduce command usage
-    }
+      }, 5000);
+    };
 
     if (jobId) {
       try {
-        es = new EventSource(`${API_URL}/events/${jobId}`)
+        es = new EventSource(`${API_URL}/events/${jobId}`);
+
         es.onmessage = (e) => {
           try {
-            const data = JSON.parse(e.data)
-            setJobResult(data)
-            setStatus(data.status)
-            if (data.status !== 'queued' && data.status !== 'running' && data.status !== 'pending') {
-              es.close()
-              if (intervalId) clearInterval(intervalId)
+            const data = JSON.parse(e.data);
+
+            setJobResult(data);
+            setStatus(data.status);
+
+            if (
+              data.status !== "queued" &&
+              data.status !== "running" &&
+              data.status !== "pending"
+            ) {
+              es.close();
+              if (intervalId) clearInterval(intervalId);
             }
           } catch (err) {
-            console.error('Invalid SSE payload', err)
+            console.error("Invalid SSE payload", err);
           }
-        }
+        };
+
         es.onerror = () => {
-          // If SSE fails, start fallback polling with a longer interval
-          if (es) es.close()
-          startFallbackPolling()
-        }
-      } catch (err) {
-        startFallbackPolling()
+          if (es) es.close();
+          startFallbackPolling();
+        };
+      } catch {
+        startFallbackPolling();
       }
     }
 
     return () => {
-      if (es) es.close()
-      if (intervalId) clearInterval(intervalId)
-    }
-  }, [jobId, status])
+      if (es) es.close();
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [jobId]);
 
   const submitCode = async () => {
-    setError('')
-    setJobResult(null)
-    setStatus('submitting')
+    setError("");
+    setJobResult(null);
+    setStatus("submitting");
 
-    const response = await fetch(`${API_URL}/submit-code`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        code,
-        language,
-        timeout_seconds: Number(timeout),
-      }),
-    })
+    try {
+      const response = await fetch(`${API_URL}/submit-code`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          code,
+          language,
+          timeout_seconds: Number(timeout),
+        }),
+      });
 
-    if (!response.ok) {
-      const data = await response.json()
-      setError(data.detail || 'Submission failed')
-      setStatus('error')
-      return
+      if (!response.ok) {
+        const data = await response.json();
+        setError(data.detail || "Submission failed");
+        setStatus("error");
+        return;
+      }
+
+      const data = await response.json();
+      setJobId(data.job_id);
+      setStatus("queued");
+    } catch {
+      setError("Failed to submit");
+      setStatus("error");
     }
+  };
 
-    const data = await response.json()
-    setJobId(data.job_id)
-    setStatus('queued')
-  }
+  const badgeColors = {
+    idle: "bg-slate-700 text-slate-300",
+    submitting: "bg-blue-500/20 text-blue-300",
+    queued: "bg-indigo-500/20 text-indigo-300",
+    running: "bg-yellow-500/20 text-yellow-300",
+    completed: "bg-green-500/20 text-green-300",
+    error: "bg-red-500/20 text-red-300",
+  };
 
   return (
-    <div className="min-h-screen bg-slate-950 px-4 py-8 text-slate-100">
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
-        <header className="rounded-3xl border border-slate-800 bg-slate-900/80 p-8 shadow-2xl shadow-slate-950/40 backdrop-blur-xl">
-          <div className="flex flex-col gap-3">
-            <div className="inline-flex items-center gap-3 rounded-full bg-slate-800/90 px-4 py-2 text-sm text-sky-200 ring-1 ring-sky-500/20">
-              Secure Code Execution UI
-            </div>
-            <div>
-              <h1 className="text-4xl font-semibold text-white">Run Python safely in a shared container pool</h1>
-              <p className="mt-3 max-w-2xl text-slate-300">
-                Submit code, track execution status, and inspect output from the pooled runner containers.
-              </p>
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-black px-4 py-6 text-slate-100">
+      <div className="mx-auto max-w-7xl space-y-6">
+        {/* HEADER */}
+        <header className="rounded-3xl border border-slate-800 bg-slate-900/70 p-6 md:p-8 backdrop-blur-xl shadow-2xl">
+          <div className="flex flex-col gap-4">
+            <span className="w-fit rounded-full bg-slate-800 px-4 py-2 text-sm text-sky-300 ring-1 ring-sky-500/20">
+              Secure Code Execution Platform
+            </span>
+
+            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div>
+                <h1 className="text-3xl md:text-5xl font-bold">
+                  Run Python Securely
+                </h1>
+
+                <p className="mt-3 max-w-2xl text-slate-400">
+                  Submit code, monitor execution status, and inspect output from
+                  isolated pooled containers.
+                </p>
+              </div>
+
+              <span
+                className={`rounded-full px-4 py-2 text-sm font-semibold ${
+                  badgeColors[status]
+                }`}
+              >
+                {status.toUpperCase()}
+              </span>
             </div>
           </div>
         </header>
 
-        <main className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
-          <section className="rounded-3xl border border-slate-800 bg-slate-900/80 p-6 shadow-2xl shadow-slate-950/40 backdrop-blur-xl">
-            <div className="mb-4 flex items-center justify-between gap-4">
-              <div>
-                <h2 className="text-2xl font-semibold text-white">Submit Code</h2>
-                <p className="mt-1 text-sm text-slate-400">Use the editor below to submit code for execution.</p>
-              </div>
-              <span className="rounded-full bg-sky-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-sky-300">
-                {status}
-              </span>
+        {/* MAIN */}
+        <main className="grid grid-cols-1 gap-6 xl:grid-cols-[1.4fr_0.9fr]">
+          {/* LEFT PANEL */}
+          <section className="rounded-3xl border border-slate-800 bg-slate-900/70 p-6 shadow-2xl backdrop-blur-xl">
+            <div className="mb-6">
+              <h2 className="text-2xl font-semibold">Submit Code</h2>
+              <p className="mt-1 text-sm text-slate-400">
+                Write code and execute it securely.
+              </p>
             </div>
 
-            <div className="space-y-4">
+            <div className="space-y-5">
+              {/* Language */}
               <div>
-                <label className="mb-2 block text-sm font-medium text-slate-300">Language</label>
+                <label className="mb-2 block text-sm text-slate-300">
+                  Language
+                </label>
+
                 <select
-                  className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-slate-200 outline-none transition focus:border-sky-400"
                   value={language}
-                  onChange={(event) => setLanguage(event.target.value)}
+                  onChange={(e) => setLanguage(e.target.value)}
+                  className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 focus:border-sky-400 outline-none"
                 >
                   <option value="python">Python</option>
                 </select>
               </div>
 
+              {/* Timeout */}
               <div>
-                <label className="mb-2 block text-sm font-medium text-slate-300">Timeout (seconds)</label>
+                <label className="mb-2 block text-sm text-slate-300">
+                  Timeout (seconds)
+                </label>
+
                 <input
-                  className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-slate-200 outline-none transition focus:border-sky-400"
                   type="number"
                   min="1"
                   max="10"
                   value={timeout}
-                  onChange={(event) => setTimeoutValue(event.target.value)}
+                  onChange={(e) => setTimeoutValue(e.target.value)}
+                  className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 focus:border-sky-400 outline-none"
                 />
               </div>
 
+              {/* Editor */}
               <div>
-                <label className="mb-2 block text-sm font-medium text-slate-300">Code</label>
+                <label className="mb-2 block text-sm text-slate-300">
+                  Code
+                </label>
+
                 <textarea
-                  className="min-h-[260px] w-full rounded-3xl border border-slate-700 bg-slate-950 px-4 py-4 text-slate-100 outline-none transition focus:border-sky-400"
                   value={code}
-                  onChange={(event) => setCode(event.target.value)}
+                  onChange={(e) => setCode(e.target.value)}
+                  className="min-h-[350px] md:min-h-[500px] w-full rounded-3xl border border-slate-700 bg-[#0f172a] p-5 font-mono text-green-200 outline-none focus:border-sky-400"
                 />
               </div>
 
+              {/* Button */}
               <button
-                className="inline-flex items-center justify-center rounded-3xl bg-sky-500 px-6 py-3 text-sm font-semibold text-slate-950 transition hover:bg-sky-400 disabled:cursor-not-allowed disabled:opacity-60"
                 onClick={submitCode}
-                disabled={status === 'submitting' || status === 'queued' || status === 'running'}
+                disabled={
+                  status === "submitting" ||
+                  status === "queued" ||
+                  status === "running"
+                }
+                className="w-full rounded-2xl bg-sky-500 py-3 font-semibold text-slate-950 transition hover:bg-sky-400 disabled:opacity-50"
               >
-                {status === 'submitting' ? 'Submitting...' : 'Submit Code'}
+                {status === "submitting"
+                  ? "Submitting..."
+                  : status === "running"
+                  ? "Running..."
+                  : "Submit Code"}
               </button>
 
               {error && (
-                <div className="rounded-3xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-100">
-                  <strong>Error:</strong> {error}
+                <div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-4 text-red-300">
+                  {error}
                 </div>
               )}
             </div>
           </section>
 
-          <section className="rounded-3xl border border-slate-800 bg-slate-900/80 p-6 shadow-2xl shadow-slate-950/40 backdrop-blur-xl">
-            <div className="mb-4">
-              <h2 className="text-2xl font-semibold text-white">Execution Result</h2>
-              <p className="mt-1 text-sm text-slate-400">Results appear once the job completes.</p>
-            </div>
+          {/* RIGHT PANEL */}
+          <section className="rounded-3xl border border-slate-800 bg-slate-900/70 p-6 shadow-2xl backdrop-blur-xl">
+            <h2 className="text-2xl font-semibold">Execution Result</h2>
 
             {!jobResult ? (
-              <div className="rounded-3xl border border-dashed border-slate-700 bg-slate-950/80 p-6 text-slate-400">
-                Submit a job to see results here.
+              <div className="mt-6 rounded-3xl border border-dashed border-slate-700 bg-slate-950/80 p-8 text-center text-slate-500">
+                Submit a job to see results
               </div>
             ) : (
-              <div className="space-y-5">
-                <div className="rounded-3xl bg-slate-950/90 p-5 shadow-inner shadow-slate-950/20">
-                  <div className="flex items-center justify-between gap-4">
-                    <p className="text-sm text-slate-400">Job ID</p>
-                    <span className="rounded-full bg-slate-800 px-3 py-1 text-xs text-slate-300">{jobResult.job_id}</span>
+              <div className="mt-6 space-y-5">
+                {/* Job ID */}
+                <div className="rounded-3xl bg-slate-950 p-5 border border-slate-800">
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Job ID</span>
+
+                    <span className="rounded-full bg-slate-800 px-3 py-1 text-xs">
+                      {jobResult.job_id}
+                    </span>
                   </div>
                 </div>
 
-                <div className="space-y-4 rounded-3xl bg-slate-950/90 p-5">
-                  <div>
-                    <p className="text-sm font-medium text-slate-300">Output</p>
-                    <pre className="mt-2 rounded-2xl bg-slate-900 px-4 py-4 text-sm text-slate-100">{jobResult.output || 'No output'}</pre>
+                {/* Output */}
+                <div>
+                  <h3 className="mb-2 text-slate-300">Output</h3>
+
+                  <pre className="max-h-[220px] overflow-auto rounded-3xl border border-slate-800 bg-black/50 p-4 text-green-300 text-sm">
+                    {jobResult.output || "No output"}
+                  </pre>
+                </div>
+
+                {/* Debug */}
+                <div>
+                  <h3 className="mb-2 text-slate-300">Debug Output</h3>
+
+                  <pre className="max-h-[220px] overflow-auto rounded-3xl border border-slate-800 bg-black/50 p-4 text-blue-300 text-sm">
+                    {jobResult.debug_output || "No debug output"}
+                  </pre>
+                </div>
+
+                {/* Error */}
+                <div>
+                  <h3 className="mb-2 text-slate-300">Error</h3>
+
+                  <pre className="max-h-[220px] overflow-auto rounded-3xl border border-slate-800 bg-black/50 p-4 text-red-300 text-sm">
+                    {jobResult.error || "No error"}
+                  </pre>
+                </div>
+
+                {/* Stats */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="rounded-3xl border border-slate-800 bg-slate-950 p-5">
+                    <p className="text-slate-400">Execution Time</p>
+
+                    <p className="mt-2 text-xl font-semibold">
+                      {jobResult.execution_time}s
+                    </p>
                   </div>
 
-                  <div>
-                    <p className="text-sm font-medium text-slate-300">Debug Output</p>
-                    <pre className="mt-2 rounded-2xl bg-slate-900 px-4 py-4 text-sm text-slate-100">{jobResult.debug_output || 'No debug output'}</pre>
-                  </div>
+                  <div className="rounded-3xl border border-slate-800 bg-slate-950 p-5">
+                    <p className="text-slate-400">Container</p>
 
-                  <div>
-                    <p className="text-sm font-medium text-slate-300">Error</p>
-                    <pre className="mt-2 rounded-2xl bg-slate-900 px-4 py-4 text-sm text-slate-100">{jobResult.error || 'No error'}</pre>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4 text-sm text-slate-400">
-                    <div className="rounded-3xl bg-slate-950/90 p-4">
-                      <p className="font-medium text-slate-200">Execution Time</p>
-                      <p className="mt-1">{jobResult.execution_time}s</p>
-                    </div>
-                    <div className="rounded-3xl bg-slate-950/90 p-4">
-                      <p className="font-medium text-slate-200">Container</p>
-                      <p className="mt-1">{jobResult.container_name}</p>
-                    </div>
+                    <p className="mt-2 text-sm font-semibold break-all">
+                      {jobResult.container_name}
+                    </p>
                   </div>
                 </div>
               </div>
@@ -224,7 +304,8 @@ function App() {
         </main>
       </div>
     </div>
-  )
+  );
 }
 
-export default App
+export default App;
+
