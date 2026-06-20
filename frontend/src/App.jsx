@@ -1,7 +1,7 @@
 
 import { useState, useEffect } from "react";
 
-const API_URL = import.meta.env.VITE_API_URLL;
+const API_URL = import.meta.env.VITE_API_URL;
 
 function App() {
   const [code, setCode] = useState('print("Hello from frontend")');
