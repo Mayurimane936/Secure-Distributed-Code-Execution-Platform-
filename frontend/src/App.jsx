@@ -5,7 +5,7 @@ const API_URL = import.meta.env.VITE_API_URL;
 
 
 function App() {
-  const [code, setCode] = useState('print("Hello World!!!!!")');
+  const [code, setCode] = useState('print("Hello World!")');
   const [language, setLanguage] = useState("python");
   const [timeout, setTimeoutValue] = useState(5);
   const [jobId, setJobId] = useState("");
