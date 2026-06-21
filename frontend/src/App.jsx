@@ -1,5 +1,4 @@
-import { useState, useEffect, useRef } from "react";
-
+import { useState, useEffect, useRef, useCallback } from "react";
 const API_URL = import.meta.env.VITE_API_URL;
 function App() {
   const [code, setCode] = useState('print("Hello World!")');
@@ -12,6 +11,23 @@ function App() {
   const [uploadedFile, setUploadedFile] = useState(null);
   const [showFileUpload, setShowFileUpload] = useState(false);
   const fileInputRef = useRef(null);
+  const editorRef = useRef(null);
+  
+  // Undo/redo history
+  const [history, setHistory] = useState([code]);
+  const [historyIndex, setHistoryIndex] = useState(0);
+  const isUndoing = useRef(false);
+
+  const updateCode = useCallback((newCode, addToHistory = true) => {
+    setCode(newCode);
+    
+    if (addToHistory) {
+      const newHistory = history.slice(0, historyIndex + 1);
+      newHistory.push(newCode);
+      setHistory(newHistory);
+      setHistoryIndex(newHistory.length - 1);
+    }
+  }, [history, historyIndex]);
 
   useEffect(() => {
     let es;
@@ -54,7 +70,6 @@ function App() {
             console.error("Invalid SSE payload", err);
           }
         };
-
         es.onerror = () => {
           if (es) es.close();
           startFallbackPolling();
@@ -63,7 +78,6 @@ function App() {
         startFallbackPolling();
       }
     }
-
     return () => {
       if (es) es.close();
       if (intervalId) clearInterval(intervalId);
@@ -94,6 +108,7 @@ function App() {
         setStatus("error");
         return;
       }
+
       const data = await response.json();
       setJobId(data.job_id);
       setStatus("queued");
@@ -102,7 +117,6 @@ function App() {
       setStatus("error");
     }
   };
-
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
     if (file) {
@@ -115,18 +129,18 @@ function App() {
       setShowFileUpload(false);
       setError("");
       setStatus("idle");
-
       // Read file content
       const reader = new FileReader();
       reader.onload = (event) => {
-        setCode(event.target.result);
+        updateCode(event.target.result, true);
       };
       reader.readAsText(file);
     }
   };
+
   const clearFile = () => {
     setUploadedFile(null);
-    setCode('print("Hello World!")');
+    updateCode('print("Hello World!")', true);
     setShowFileUpload(false);
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
@@ -138,6 +152,89 @@ function App() {
     fileInputRef.current?.click();
   };
 
+  const handleEditorKeyDown = (e) => {
+    // Handle Cmd+Z / Ctrl+Z (Undo)
+    if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+      e.preventDefault();
+      
+      if (historyIndex > 0) {
+        isUndoing.current = true;
+        const newIndex = historyIndex - 1;
+        setHistoryIndex(newIndex);
+        setCode(history[newIndex]);
+        
+        setTimeout(() => {
+          const textarea = editorRef.current;
+          if (textarea) {
+            textarea.focus();
+          }
+        }, 0);
+      }
+      return;
+    }
+    
+    // Handle Cmd+Y / Ctrl+Y or Ctrl+CY (Redo)
+    if ((e.ctrlKey || e.metaKey) && e.key === 'y') {
+      e.preventDefault();
+      
+      if (historyIndex < history.length - 1) {
+        const newIndex = historyIndex + 1;
+        setHistoryIndex(newIndex);
+        setCode(history[newIndex]);
+        
+        setTimeout(() => {
+          const textarea = editorRef.current;
+          if (textarea) {
+            textarea.focus();
+          }
+        }, 0);
+      }
+      return;
+    }
+    
+    // Handle Tab key to insert 4 spaces
+    if (e.key === "Tab" && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      e.preventDefault();
+      const textarea = editorRef.current;
+      if (!textarea) return;
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      
+      // Insert 4 spaces at cursor position
+      const newCode = code.substring(0, start) + "    " + code.substring(end);
+      updateCode(newCode, true);
+      // Restore cursor position after update
+      setTimeout(() => {
+        textarea.focus();
+        textarea.selectionStart = start + 4;
+        textarea.selectionEnd = start + 4;
+      }, 0);
+      return;
+    }
+    
+    // Handle Shift+Tab for undo indentation
+    if (e.key === "Tab" && e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      e.preventDefault();
+      const textarea = editorRef.current;
+      if (!textarea) return;
+      const start = textarea.selectionStart;
+      // Remove 4 spaces if they exist before cursor
+      if (start >= 4 && code.substring(start - 4, start) === "    ") {
+        const newCode = code.substring(0, start - 4) + code.substring(start);
+        updateCode(newCode, true);
+        
+        setTimeout(() => {
+          textarea.focus();
+          textarea.selectionStart = textarea.selectionEnd = start - 4;
+        }, 0);
+      }
+      return;
+    }
+  };
+  const handleEditorChange = (e) => {
+    const newCode = e.target.value;
+    updateCode(newCode, true);
+  };
   const badgeColors = {
     idle: "bg-gray-700 text-gray-300",
     submitting: "bg-blue-500/20 text-blue-400",
@@ -148,11 +245,12 @@ function App() {
     error: "bg-red-500/20 text-red-400",
     failed: "bg-red-500/20 text-red-400",
   };
+
   // Count lines for line numbers
   const lineNumbers = code.split('\n').map((_, i) => i + 1);
   // Check if we're waiting for results (not yet completed)
   const isWaiting = status !== "completed" && status !== "error" && status !== "failed" && status !== "timeout" && status !== "idle" && jobId;
-
+  
   return (
     <div className="min-h-screen bg-[#0d1117] px-4 py-6 text-gray-100">
       <div className="mx-auto max-w-7xl space-y-6">
@@ -173,11 +271,13 @@ function App() {
                 <h1 className="text-3xl md:text-5xl font-bold text-white">
                   Run Python Securely
                 </h1>
+
                 <p className="mt-3 max-w-2xl text-gray-400">
                   Submit code, monitor execution status, and inspect output from
                   isolated pooled containers.
                 </p>
               </div>
+
               <span
                 className={`rounded-full px-4 py-2 text-sm font-semibold ${
                   badgeColors[status]
@@ -188,7 +288,6 @@ function App() {
             </div>
           </div>
         </header>
-
         {/* MAIN */}
         <main className="grid grid-cols-1 gap-6 xl:grid-cols-[1.5fr_1fr]">
           {/* LEFT PANEL - Editor */}
@@ -209,6 +308,7 @@ function App() {
                   <label className="mb-2 block text-xs font-medium text-gray-300">
                     Language
                   </label>
+
                   <div className="relative">
                     <select
                       value={language}
@@ -222,6 +322,7 @@ function App() {
                     </svg>
                   </div>
                 </div>
+
                 {/* Timeout */}
                 <div>
                   <label className="mb-2 block text-xs font-medium text-gray-300">
@@ -279,6 +380,7 @@ function App() {
                   />
                 </div>
               </div>
+
               {/* File Info */}
               {uploadedFile && (
                 <div className="rounded-xl border border-blue-500/30 bg-blue-500/10 p-3">
@@ -295,6 +397,7 @@ function App() {
                   </div>
                 </div>
               )}
+
               {/* Code Editor - GitHub/LeetCode Style */}
               <div className="rounded-xl border border-gray-700 bg-[#0d1117] overflow-hidden shadow-lg">
                 {/* Editor Toolbar */}
@@ -310,8 +413,12 @@ function App() {
                   </div>
                   <div className="flex items-center gap-4">
                     <span className="text-xs text-gray-400">{lineNumbers.length} lines</span>
+                    <span className="text-xs text-gray-500">
+                      Cmd+Z: Undo | Cmd+Y: Redo
+                    </span>
                   </div>
                 </div>
+
                 {/* Editor with Line Numbers */}
                 <div className="flex min-h-[400px] md:min-h-[500px]">
                   {/* Line Numbers */}
@@ -320,10 +427,13 @@ function App() {
                       <div key={num}>{num}</div>
                     ))}
                   </div>
+
                   {/* Code Input Area */}
                   <textarea
+                    ref={editorRef}
                     value={code}
-                    onChange={(e) => setCode(e.target.value)}
+                    onChange={handleEditorChange}
+                    onKeyDown={handleEditorKeyDown}
                     spellCheck="false"
                     autoCorrect="off"
                     autoComplete="off"
@@ -347,6 +457,9 @@ print('Hello, World!')"
                       <span className="text-gray-500">Tab: 4 spaces</span>
                       <span className="rounded bg-gray-700 px-2 py-0.5 text-gray-400">
                         {code.length} chars
+                      </span>
+                      <span className="rounded bg-gray-700 px-2 py-0.5 text-gray-400">
+                        {historyIndex + 1}/{history.length}
                       </span>
                     </div>
                   </div>
@@ -395,7 +508,7 @@ print('Hello, World!')"
                 </button>
 
                 <button
-                  onClick={() => setCode('print("Hello World!")')}
+                  onClick={() => updateCode('print("Hello World!")', true)}
                   disabled={status === "submitting" || status === "queued" || status === "running"}
                   className="rounded-xl border border-gray-600 bg-[#0d1117] px-6 py-3.5 text-sm font-semibold text-gray-300 transition hover:bg-gray-800 hover:text-white disabled:opacity-50"
                 >
@@ -420,7 +533,6 @@ print('Hello, World!')"
               )}
             </div>
           </section>
-
           {/* RIGHT PANEL - Results */}
           <section className="rounded-2xl border border-gray-700 bg-[#161b22] p-6 shadow-xl">
             <div className="flex items-center justify-between mb-6">
@@ -467,7 +579,6 @@ print('Hello, World!')"
                 </p>
               </div>
             )}
-
             {/* Error/Failed Message */}
             {(status === "error" || status === "failed") && (
               <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-8 text-center">
@@ -507,7 +618,6 @@ print('Hello, World!')"
                     {jobResult.output || "No output"}
                   </pre>
                 </div>
-
                 {/* Stats */}
                 <div className="grid grid-cols-2 gap-3">
                   <div className="rounded-xl border border-gray-700 bg-[#0d1117] p-4">
