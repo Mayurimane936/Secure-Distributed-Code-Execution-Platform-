@@ -1,7 +1,8 @@
-
 import { useState, useEffect } from "react";
 
+
 const API_URL = import.meta.env.VITE_API_URL;
+
 
 function App() {
   const [code, setCode] = useState('print("Hello from frontend")');
@@ -12,6 +13,7 @@ function App() {
   const [error, setError] = useState("");
   const [status, setStatus] = useState("idle");
 
+
   useEffect(() => {
     let es;
     let intervalId;
@@ -20,10 +22,12 @@ function App() {
         try {
           const response = await fetch(`${API_URL}/job-status/${jobId}`);
 
+
           if (response.ok) {
             const data = await response.json();
             setJobResult(data);
             setStatus(data.status);
+
 
             if (data.status !== "queued" && data.status !== "running") {
               clearInterval(intervalId);
@@ -35,16 +39,20 @@ function App() {
       }, 5000);
     };
 
+
     if (jobId) {
       try {
         es = new EventSource(`${API_URL}/events/${jobId}`);
+
 
         es.onmessage = (e) => {
           try {
             const data = JSON.parse(e.data);
 
+
             setJobResult(data);
             setStatus(data.status);
+
 
             if (
               data.status !== "queued" &&
@@ -59,6 +67,7 @@ function App() {
           }
         };
 
+
         es.onerror = () => {
           if (es) es.close();
           startFallbackPolling();
@@ -68,16 +77,19 @@ function App() {
       }
     }
 
+
     return () => {
       if (es) es.close();
       if (intervalId) clearInterval(intervalId);
     };
   }, [jobId]);
 
+
   const submitCode = async () => {
     setError("");
     setJobResult(null);
     setStatus("submitting");
+
 
     try {
       const response = await fetch(`${API_URL}/submit-code`, {
@@ -92,12 +104,14 @@ function App() {
         }),
       });
 
+
       if (!response.ok) {
         const data = await response.json();
         setError(data.detail || "Submission failed");
         setStatus("error");
         return;
       }
+
 
       const data = await response.json();
       setJobId(data.job_id);
@@ -108,6 +122,7 @@ function App() {
     }
   };
 
+
   const badgeColors = {
     idle: "bg-slate-700 text-slate-300",
     submitting: "bg-blue-500/20 text-blue-300",
@@ -116,6 +131,11 @@ function App() {
     completed: "bg-green-500/20 text-green-300",
     error: "bg-red-500/20 text-red-300",
   };
+
+
+  // Check if we're waiting for results (not yet completed)
+  const isWaiting = status !== "completed" && status !== "error" && status !== "idle" && jobId;
+
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-black px-4 py-6 text-slate-100">
@@ -127,17 +147,20 @@ function App() {
               Secure Code Execution Platform
             </span>
 
+
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div>
                 <h1 className="text-3xl md:text-5xl font-bold">
                   Run Python Securely
                 </h1>
 
+
                 <p className="mt-3 max-w-2xl text-slate-400">
                   Submit code, monitor execution status, and inspect output from
                   isolated pooled containers.
                 </p>
               </div>
+
 
               <span
                 className={`rounded-full px-4 py-2 text-sm font-semibold ${
@@ -150,6 +173,7 @@ function App() {
           </div>
         </header>
 
+
         {/* MAIN */}
         <main className="grid grid-cols-1 gap-6 xl:grid-cols-[1.4fr_0.9fr]">
           {/* LEFT PANEL */}
@@ -161,12 +185,14 @@ function App() {
               </p>
             </div>
 
+
             <div className="space-y-5">
               {/* Language */}
               <div>
                 <label className="mb-2 block text-sm text-slate-300">
                   Language
                 </label>
+
 
                 <select
                   value={language}
@@ -177,11 +203,13 @@ function App() {
                 </select>
               </div>
 
+
               {/* Timeout */}
               <div>
                 <label className="mb-2 block text-sm text-slate-300">
                   Timeout (seconds)
                 </label>
+
 
                 <input
                   type="number"
@@ -193,11 +221,13 @@ function App() {
                 />
               </div>
 
+
               {/* Editor */}
               <div>
                 <label className="mb-2 block text-sm text-slate-300">
                   Code
                 </label>
+
 
                 <textarea
                   value={code}
@@ -205,6 +235,7 @@ function App() {
                   className="min-h-[350px] md:min-h-[500px] w-full rounded-3xl border border-slate-700 bg-[#0f172a] p-5 font-mono text-green-200 outline-none focus:border-sky-400"
                 />
               </div>
+
 
               {/* Button */}
               <button
@@ -223,6 +254,7 @@ function App() {
                   : "Submit Code"}
               </button>
 
+
               {error && (
                 <div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-4 text-red-300">
                   {error}
@@ -231,20 +263,48 @@ function App() {
             </div>
           </section>
 
+
           {/* RIGHT PANEL */}
           <section className="rounded-3xl border border-slate-800 bg-slate-900/70 p-6 shadow-2xl backdrop-blur-xl">
             <h2 className="text-2xl font-semibold">Execution Result</h2>
 
-            {!jobResult ? (
+
+            {/* Loading Icon - shows while waiting for completed status */}
+            {isWaiting && (
+              <div className="mt-6 flex flex-col items-center justify-center rounded-3xl border border-dashed border-slate-700 bg-slate-950/80 p-8">
+                <div className="relative h-16 w-16">
+                  {/* Outer spinning ring */}
+                  <div className="absolute inset-0 rounded-full border-4 border-slate-700/50"></div>
+                  <div className="absolute inset-0 rounded-full border-4 border-sky-500 border-t-transparent animate-spin"></div>
+                  {/* Inner spinning ring */}
+                  <div className="absolute inset-2 rounded-full border-4 border-slate-700/30"></div>
+                  <div className="absolute inset-2 rounded-full border-4 border-indigo-500 border-b-transparent animate-spin [animation-duration:1.5s]"></div>
+                  {/* Center dot */}
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="h-3 w-3 rounded-full bg-sky-400 animate-pulse"></div>
+                  </div>
+                </div>
+                <p className="mt-4 text-sm text-slate-400">
+                  {status === "submitting" ? "Submitting code..." : 
+                   status === "queued" ? "Job queued..." : 
+                   status === "running" ? "Executing code..." :
+                   "Waiting for results..."}
+                </p>
+              </div>
+            )}
+
+
+            {!jobResult && !isWaiting ? (
               <div className="mt-6 rounded-3xl border border-dashed border-slate-700 bg-slate-950/80 p-8 text-center text-slate-500">
                 Submit a job to see results
               </div>
-            ) : (
+            ) : jobResult && !isWaiting ? (
               <div className="mt-6 space-y-5">
                 {/* Job ID */}
                 <div className="rounded-3xl bg-slate-950 p-5 border border-slate-800">
                   <div className="flex justify-between">
                     <span className="text-slate-400">Job ID</span>
+
 
                     <span className="rounded-full bg-slate-800 px-3 py-1 text-xs">
                       {jobResult.job_id}
@@ -252,45 +312,55 @@ function App() {
                   </div>
                 </div>
 
+
                 {/* Output */}
                 <div>
                   <h3 className="mb-2 text-slate-300">Output</h3>
+
 
                   <pre className="max-h-[220px] overflow-auto rounded-3xl border border-slate-800 bg-black/50 p-4 text-green-300 text-sm">
                     {jobResult.output || "No output"}
                   </pre>
                 </div>
 
+
                 {/* Debug */}
                 <div>
                   <h3 className="mb-2 text-slate-300">Debug Output</h3>
+
 
                   <pre className="max-h-[220px] overflow-auto rounded-3xl border border-slate-800 bg-black/50 p-4 text-blue-300 text-sm">
                     {jobResult.debug_output || "No debug output"}
                   </pre>
                 </div>
 
+
                 {/* Error */}
                 <div>
                   <h3 className="mb-2 text-slate-300">Error</h3>
+
 
                   <pre className="max-h-[220px] overflow-auto rounded-3xl border border-slate-800 bg-black/50 p-4 text-red-300 text-sm">
                     {jobResult.error || "No error"}
                   </pre>
                 </div>
 
+
                 {/* Stats */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="rounded-3xl border border-slate-800 bg-slate-950 p-5">
                     <p className="text-slate-400">Execution Time</p>
+
 
                     <p className="mt-2 text-xl font-semibold">
                       {jobResult.execution_time}s
                     </p>
                   </div>
 
+
                   <div className="rounded-3xl border border-slate-800 bg-slate-950 p-5">
                     <p className="text-slate-400">Container</p>
+
 
                     <p className="mt-2 text-sm font-semibold break-all">
                       {jobResult.container_name}
@@ -298,7 +368,7 @@ function App() {
                   </div>
                 </div>
               </div>
-            )}
+            ) : null}
           </section>
         </main>
       </div>
@@ -306,5 +376,5 @@ function App() {
   );
 }
 
-export default App;
 
+export default App;
