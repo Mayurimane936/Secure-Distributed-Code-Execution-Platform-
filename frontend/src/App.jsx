@@ -1,7 +1,9 @@
 import { useState, useEffect } from "react";
 
 
+
 const API_URL = import.meta.env.VITE_API_URL;
+
 
 
 function App() {
@@ -14,6 +16,7 @@ function App() {
   const [status, setStatus] = useState("idle");
 
 
+
   useEffect(() => {
     let es;
     let intervalId;
@@ -23,10 +26,12 @@ function App() {
           const response = await fetch(`${API_URL}/job-status/${jobId}`);
 
 
+
           if (response.ok) {
             const data = await response.json();
             setJobResult(data);
             setStatus(data.status);
+
 
 
             if (data.status !== "queued" && data.status !== "running") {
@@ -40,9 +45,11 @@ function App() {
     };
 
 
+
     if (jobId) {
       try {
         es = new EventSource(`${API_URL}/events/${jobId}`);
+
 
 
         es.onmessage = (e) => {
@@ -50,8 +57,10 @@ function App() {
             const data = JSON.parse(e.data);
 
 
+
             setJobResult(data);
             setStatus(data.status);
+
 
 
             if (
@@ -68,6 +77,7 @@ function App() {
         };
 
 
+
         es.onerror = () => {
           if (es) es.close();
           startFallbackPolling();
@@ -78,6 +88,7 @@ function App() {
     }
 
 
+
     return () => {
       if (es) es.close();
       if (intervalId) clearInterval(intervalId);
@@ -85,10 +96,12 @@ function App() {
   }, [jobId]);
 
 
+
   const submitCode = async () => {
     setError("");
     setJobResult(null);
     setStatus("submitting");
+
 
 
     try {
@@ -105,12 +118,14 @@ function App() {
       });
 
 
+
       if (!response.ok) {
         const data = await response.json();
         setError(data.detail || "Submission failed");
         setStatus("error");
         return;
       }
+
 
 
       const data = await response.json();
@@ -123,18 +138,22 @@ function App() {
   };
 
 
+
   const badgeColors = {
     idle: "bg-slate-700 text-slate-300",
     submitting: "bg-blue-500/20 text-blue-300",
     queued: "bg-indigo-500/20 text-indigo-300",
     running: "bg-yellow-500/20 text-yellow-300",
     completed: "bg-green-500/20 text-green-300",
+    timeout: "bg-orange-500/20 text-orange-300",
     error: "bg-red-500/20 text-red-300",
   };
 
 
+
   // Check if we're waiting for results (not yet completed)
-  const isWaiting = status !== "completed" && status !== "error" && status !== "idle" && jobId;
+  const isWaiting = status !== "completed" && status !== "error" && status !== "timeout" && status !== "idle" && jobId;
+
 
 
   return (
@@ -148,6 +167,7 @@ function App() {
             </span>
 
 
+
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div>
                 <h1 className="text-3xl md:text-5xl font-bold">
@@ -155,11 +175,13 @@ function App() {
                 </h1>
 
 
+
                 <p className="mt-3 max-w-2xl text-slate-400">
                   Submit code, monitor execution status, and inspect output from
                   isolated pooled containers.
                 </p>
               </div>
+
 
 
               <span
@@ -174,6 +196,7 @@ function App() {
         </header>
 
 
+
         {/* MAIN */}
         <main className="grid grid-cols-1 gap-6 xl:grid-cols-[1.4fr_0.9fr]">
           {/* LEFT PANEL */}
@@ -186,12 +209,14 @@ function App() {
             </div>
 
 
+
             <div className="space-y-5">
               {/* Language */}
               <div>
                 <label className="mb-2 block text-sm text-slate-300">
                   Language
                 </label>
+
 
 
                 <select
@@ -204,11 +229,13 @@ function App() {
               </div>
 
 
+
               {/* Timeout */}
               <div>
                 <label className="mb-2 block text-sm text-slate-300">
                   Timeout (seconds)
                 </label>
+
 
 
                 <input
@@ -222,11 +249,13 @@ function App() {
               </div>
 
 
+
               {/* Editor */}
               <div>
                 <label className="mb-2 block text-sm text-slate-300">
                   Code
                 </label>
+
 
 
                 <textarea
@@ -235,6 +264,7 @@ function App() {
                   className="min-h-[350px] md:min-h-[500px] w-full rounded-3xl border border-slate-700 bg-[#0f172a] p-5 font-mono text-green-200 outline-none focus:border-sky-400"
                 />
               </div>
+
 
 
               {/* Button */}
@@ -255,6 +285,7 @@ function App() {
               </button>
 
 
+
               {error && (
                 <div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-4 text-red-300">
                   {error}
@@ -264,9 +295,11 @@ function App() {
           </section>
 
 
+
           {/* RIGHT PANEL */}
           <section className="rounded-3xl border border-slate-800 bg-slate-900/70 p-6 shadow-2xl backdrop-blur-xl">
             <h2 className="text-2xl font-semibold">Execution Result</h2>
+
 
 
             {/* Loading Icon - shows while waiting for completed status */}
@@ -294,7 +327,30 @@ function App() {
             )}
 
 
-            {!jobResult && !isWaiting ? (
+
+            {/* Timeout Message */}
+            {status === "timeout" && (
+              <div className="mt-6 rounded-3xl border border-orange-500/30 bg-orange-500/10 p-8 text-center">
+                <div className="mb-4 flex items-center justify-center">
+                  <svg className="h-12 w-12 text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                </div>
+                <h3 className="text-xl font-bold text-orange-300">
+                  Code Timed Out
+                </h3>
+                <p className="mt-2 text-sm text-orange-400">
+                  Your code execution exceeded the {timeout} second timeout limit.
+                </p>
+                <p className="mt-3 text-xs text-orange-500">
+                  Try increasing the timeout or optimizing your code.
+                </p>
+              </div>
+            )}
+
+
+
+            {!jobResult && !isWaiting && status !== "timeout" ? (
               <div className="mt-6 rounded-3xl border border-dashed border-slate-700 bg-slate-950/80 p-8 text-center text-slate-500">
                 Submit a job to see results
               </div>
@@ -306,6 +362,7 @@ function App() {
                     <span className="text-slate-400">Job ID</span>
 
 
+
                     <span className="rounded-full bg-slate-800 px-3 py-1 text-xs">
                       {jobResult.job_id}
                     </span>
@@ -313,9 +370,11 @@ function App() {
                 </div>
 
 
+
                 {/* Output */}
                 <div>
                   <h3 className="mb-2 text-slate-300">Output</h3>
+
 
 
                   <pre className="max-h-[220px] overflow-auto rounded-3xl border border-slate-800 bg-black/50 p-4 text-green-300 text-sm">
@@ -324,9 +383,11 @@ function App() {
                 </div>
 
 
+
                 {/* Debug */}
                 <div>
                   <h3 className="mb-2 text-slate-300">Debug Output</h3>
+
 
 
                   <pre className="max-h-[220px] overflow-auto rounded-3xl border border-slate-800 bg-black/50 p-4 text-blue-300 text-sm">
@@ -335,9 +396,11 @@ function App() {
                 </div>
 
 
+
                 {/* Error */}
                 <div>
                   <h3 className="mb-2 text-slate-300">Error</h3>
+
 
 
                   <pre className="max-h-[220px] overflow-auto rounded-3xl border border-slate-800 bg-black/50 p-4 text-red-300 text-sm">
@@ -346,10 +409,12 @@ function App() {
                 </div>
 
 
+
                 {/* Stats */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="rounded-3xl border border-slate-800 bg-slate-950 p-5">
                     <p className="text-slate-400">Execution Time</p>
+
 
 
                     <p className="mt-2 text-xl font-semibold">
@@ -358,8 +423,10 @@ function App() {
                   </div>
 
 
+
                   <div className="rounded-3xl border border-slate-800 bg-slate-950 p-5">
                     <p className="text-slate-400">Container</p>
+
 
 
                     <p className="mt-2 text-sm font-semibold break-all">
@@ -375,6 +442,7 @@ function App() {
     </div>
   );
 }
+
 
 
 export default App;
