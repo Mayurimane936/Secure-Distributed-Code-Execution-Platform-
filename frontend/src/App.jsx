@@ -147,12 +147,13 @@ function App() {
     completed: "bg-green-500/20 text-green-300",
     timeout: "bg-orange-500/20 text-orange-300",
     error: "bg-red-500/20 text-red-300",
+    failed: "bg-red-500/20 text-red-300",
   };
 
 
 
   // Check if we're waiting for results (not yet completed)
-  const isWaiting = status !== "completed" && status !== "error" && status !== "timeout" && status !== "idle" && jobId;
+  const isWaiting = status !== "completed" && status !== "error" && status !== "failed" && status !== "timeout" && status !== "idle" && jobId;
 
 
 
@@ -350,7 +351,31 @@ function App() {
 
 
 
-            {!jobResult && !isWaiting && status !== "timeout" ? (
+            {/* Error/Failed Message */}
+            {(status === "error" || status === "failed") && (
+              <div className="mt-6 rounded-3xl border border-red-500/30 bg-red-500/10 p-8 text-center">
+                <div className="mb-4 flex items-center justify-center">
+                  <svg className="h-12 w-12 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <h3 className="text-xl font-bold text-red-300">
+                  {status === "error" ? "Execution Error" : "Execution Failed"}
+                </h3>
+                <p className="mt-2 text-sm text-red-400">
+                  {jobResult?.error || error || "An error occurred while executing your code."}
+                </p>
+                <p className="mt-3 text-xs text-red-500">
+                  {jobResult?.error 
+                    ? "Please check your code for syntax errors or runtime issues."
+                    : "Please try submitting your code again."}
+                </p>
+              </div>
+            )}
+
+
+
+            {!jobResult && !isWaiting && status !== "timeout" && status !== "error" && status !== "failed" ? (
               <div className="mt-6 rounded-3xl border border-dashed border-slate-700 bg-slate-950/80 p-8 text-center text-slate-500">
                 Submit a job to see results
               </div>
