@@ -13,8 +13,6 @@ function App() {
   const [showFileUpload, setShowFileUpload] = useState(false);
   const fileInputRef = useRef(null);
 
-
-
   useEffect(() => {
     let es;
     let intervalId;
@@ -22,16 +20,10 @@ function App() {
       intervalId = setInterval(async () => {
         try {
           const response = await fetch(`${API_URL}/job-status/${jobId}`);
-
-
-
           if (response.ok) {
             const data = await response.json();
             setJobResult(data);
             setStatus(data.status);
-
-
-
             if (data.status !== "queued" && data.status !== "running") {
               clearInterval(intervalId);
             }
@@ -47,20 +39,11 @@ function App() {
     if (jobId) {
       try {
         es = new EventSource(`${API_URL}/events/${jobId}`);
-
-
-
         es.onmessage = (e) => {
           try {
             const data = JSON.parse(e.data);
-
-
-
             setJobResult(data);
             setStatus(data.status);
-
-
-
             if (
               data.status !== "queued" &&
               data.status !== "running" &&
@@ -74,8 +57,6 @@ function App() {
           }
         };
 
-
-
         es.onerror = () => {
           if (es) es.close();
           startFallbackPolling();
@@ -85,22 +66,16 @@ function App() {
       }
     }
 
-
-
     return () => {
       if (es) es.close();
       if (intervalId) clearInterval(intervalId);
     };
   }, [jobId]);
 
-
-
   const submitCode = async () => {
     setError("");
     setJobResult(null);
     setStatus("submitting");
-
-
 
     try {
       const response = await fetch(`${API_URL}/submit-code`, {
@@ -115,17 +90,12 @@ function App() {
         }),
       });
 
-
-
       if (!response.ok) {
         const data = await response.json();
         setError(data.detail || "Submission failed");
         setStatus("error");
         return;
       }
-
-
-
       const data = await response.json();
       setJobId(data.job_id);
       setStatus("queued");
@@ -134,8 +104,6 @@ function App() {
       setStatus("error");
     }
   };
-
-
 
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
@@ -150,8 +118,6 @@ function App() {
       setError("");
       setStatus("idle");
 
-
-
       // Read file content
       const reader = new FileReader();
       reader.onload = (event) => {
@@ -160,9 +126,6 @@ function App() {
       reader.readAsText(file);
     }
   };
-
-
-
   const clearFile = () => {
     setUploadedFile(null);
     setCode('print("Hello World!")');
@@ -172,14 +135,10 @@ function App() {
     }
   };
 
-
-
   const triggerFileUpload = () => {
     setShowFileUpload(true);
     fileInputRef.current?.click();
   };
-
-
 
   const badgeColors = {
     idle: "bg-gray-700 text-gray-300",
@@ -191,18 +150,10 @@ function App() {
     error: "bg-red-500/20 text-red-400",
     failed: "bg-red-500/20 text-red-400",
   };
-
-
-
   // Count lines for line numbers
   const lineNumbers = code.split('\n').map((_, i) => i + 1);
-
-
-
   // Check if we're waiting for results (not yet completed)
   const isWaiting = status !== "completed" && status !== "error" && status !== "failed" && status !== "timeout" && status !== "idle" && jobId;
-
-
 
   return (
     <div className="min-h-screen bg-[#0d1117] px-4 py-6 text-gray-100">
@@ -219,24 +170,16 @@ function App() {
               </span>
             </div>
 
-
-
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div>
                 <h1 className="text-3xl md:text-5xl font-bold text-white">
                   Run Python Securely
                 </h1>
-
-
-
                 <p className="mt-3 max-w-2xl text-gray-400">
                   Submit code, monitor execution status, and inspect output from
                   isolated pooled containers.
                 </p>
               </div>
-
-
-
               <span
                 className={`rounded-full px-4 py-2 text-sm font-semibold ${
                   badgeColors[status]
@@ -247,8 +190,6 @@ function App() {
             </div>
           </div>
         </header>
-
-
 
         {/* MAIN */}
         <main className="grid grid-cols-1 gap-6 xl:grid-cols-[1.5fr_1fr]">
@@ -262,9 +203,6 @@ function App() {
                 </p>
               </div>
             </div>
-
-
-
             <div className="space-y-5">
               {/* Settings Row */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -273,9 +211,6 @@ function App() {
                   <label className="mb-2 block text-xs font-medium text-gray-300">
                     Language
                   </label>
-
-
-
                   <div className="relative">
                     <select
                       value={language}
@@ -289,17 +224,11 @@ function App() {
                     </svg>
                   </div>
                 </div>
-
-
-
                 {/* Timeout */}
                 <div>
                   <label className="mb-2 block text-xs font-medium text-gray-300">
                     Timeout (seconds)
                   </label>
-
-
-
                   <div className="relative">
                     <input
                       type="number"
@@ -314,17 +243,11 @@ function App() {
                     </svg>
                   </div>
                 </div>
-
-
-
                 {/* File Upload */}
                 <div>
                   <label className="mb-2 block text-xs font-medium text-gray-300">
                     Upload File
                   </label>
-
-
-
                   <div className="flex gap-2">
                     <button
                       onClick={triggerFileUpload}
@@ -338,9 +261,6 @@ function App() {
                         Upload
                       </div>
                     </button>
-
-
-
                     {uploadedFile && (
                       <button
                         onClick={clearFile}
@@ -352,9 +272,6 @@ function App() {
                       </button>
                     )}
                   </div>
-
-
-
                   <input
                     ref={fileInputRef}
                     type="file"
@@ -364,9 +281,6 @@ function App() {
                   />
                 </div>
               </div>
-
-
-
               {/* File Info */}
               {uploadedFile && (
                 <div className="rounded-xl border border-blue-500/30 bg-blue-500/10 p-3">
@@ -383,9 +297,6 @@ function App() {
                   </div>
                 </div>
               )}
-
-
-
               {/* Code Editor - GitHub/LeetCode Style */}
               <div className="rounded-xl border border-gray-700 bg-[#0d1117] overflow-hidden shadow-lg">
                 {/* Editor Toolbar */}
@@ -403,9 +314,6 @@ function App() {
                     <span className="text-xs text-gray-400">{lineNumbers.length} lines</span>
                   </div>
                 </div>
-
-
-
                 {/* Editor with Line Numbers */}
                 <div className="flex min-h-[400px] md:min-h-[500px]">
                   {/* Line Numbers */}
@@ -414,9 +322,6 @@ function App() {
                       <div key={num}>{num}</div>
                     ))}
                   </div>
-
-
-
                   {/* Code Input Area */}
                   <textarea
                     value={code}
@@ -433,9 +338,6 @@ function App() {
 print('Hello, World!')"
                   />
                 </div>
-
-
-
                 {/* Editor Footer */}
                 <div className="border-t border-gray-700 bg-[#161b22] px-4 py-1.5">
                   <div className="flex items-center justify-between text-xs">
@@ -452,8 +354,6 @@ print('Hello, World!')"
                   </div>
                 </div>
               </div>
-
-
 
               {/* Action Buttons */}
               <div className="flex gap-3">
@@ -496,8 +396,6 @@ print('Hello, World!')"
                   </div>
                 </button>
 
-
-
                 <button
                   onClick={() => setCode('print("Hello World!")')}
                   disabled={status === "submitting" || status === "queued" || status === "running"}
@@ -512,8 +410,6 @@ print('Hello, World!')"
                 </button>
               </div>
 
-
-
               {error && (
                 <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-red-400">
                   <div className="flex items-start gap-3">
@@ -527,8 +423,6 @@ print('Hello, World!')"
             </div>
           </section>
 
-
-
           {/* RIGHT PANEL - Results */}
           <section className="rounded-2xl border border-gray-700 bg-[#161b22] p-6 shadow-xl">
             <div className="flex items-center justify-between mb-6">
@@ -539,8 +433,6 @@ print('Hello, World!')"
                 </span>
               )}
             </div>
-
-
 
             {/* Loading Icon */}
             {isWaiting && (
@@ -563,8 +455,6 @@ print('Hello, World!')"
               </div>
             )}
 
-
-
             {/* Timeout Message */}
             {status === "timeout" && (
               <div className="rounded-2xl border border-orange-500/30 bg-orange-500/10 p-8 text-center">
@@ -579,8 +469,6 @@ print('Hello, World!')"
                 </p>
               </div>
             )}
-
-
 
             {/* Error/Failed Message */}
             {(status === "error" || status === "failed") && (
@@ -598,8 +486,6 @@ print('Hello, World!')"
                 </p>
               </div>
             )}
-
-
 
             {/* Empty State */}
             {!jobResult && !isWaiting && status !== "timeout" && status !== "error" && status !== "failed" ? (
@@ -624,8 +510,6 @@ print('Hello, World!')"
                   </pre>
                 </div>
 
-
-
                 {/* Stats */}
                 <div className="grid grid-cols-2 gap-3">
                   <div className="rounded-xl border border-gray-700 bg-[#0d1117] p-4">
@@ -649,7 +533,5 @@ print('Hello, World!')"
     </div>
   );
 }
-
-
 
 export default App;
