@@ -34,8 +34,6 @@ function App() {
       }, 5000);
     };
 
-
-
     if (jobId) {
       try {
         es = new EventSource(`${API_URL}/events/${jobId}`);
