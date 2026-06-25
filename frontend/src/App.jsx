@@ -1,5 +1,13 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+
 const API_URL = import.meta.env.VITE_API_URL;
+const socialLinks = {
+    name: import.meta.env.VITE_AUTHOR_NAME ,
+    github: import.meta.env.VITE_GITHUB_URL ,
+    linkedin: import.meta.env.VITE_LINKEDIN_URL,
+    leetcode: import.meta.env.VITE_LEETCODE_URL,
+};
+
 function App() {
   const [code, setCode] = useState('print("Hello World!")');
   const [language, setLanguage] = useState("python");
@@ -18,8 +26,11 @@ function App() {
   const [historyIndex, setHistoryIndex] = useState(0);
   const isUndoing = useRef(false);
 
+
+
   const updateCode = useCallback((newCode, addToHistory = true) => {
     setCode(newCode);
+    
     if (addToHistory) {
       const newHistory = history.slice(0, historyIndex + 1);
       newHistory.push(newCode);
@@ -28,6 +39,8 @@ function App() {
     }
   }, [history, historyIndex]);
 
+
+
   useEffect(() => {
     let es;
     let intervalId;
@@ -35,10 +48,16 @@ function App() {
       intervalId = setInterval(async () => {
         try {
           const response = await fetch(`${API_URL}/job-status/${jobId}`);
+
+
+
           if (response.ok) {
             const data = await response.json();
             setJobResult(data);
             setStatus(data.status);
+
+
+
             if (data.status !== "queued" && data.status !== "running") {
               clearInterval(intervalId);
             }
@@ -49,14 +68,25 @@ function App() {
       }, 5000);
     };
 
+
+
     if (jobId) {
       try {
         es = new EventSource(`${API_URL}/events/${jobId}`);
+
+
+
         es.onmessage = (e) => {
           try {
             const data = JSON.parse(e.data);
+
+
+
             setJobResult(data);
             setStatus(data.status);
+
+
+
             if (
               data.status !== "queued" &&
               data.status !== "running" &&
@@ -70,6 +100,8 @@ function App() {
           }
         };
 
+
+
         es.onerror = () => {
           if (es) es.close();
           startFallbackPolling();
@@ -79,15 +111,30 @@ function App() {
       }
     }
 
+
+
     return () => {
       if (es) es.close();
       if (intervalId) clearInterval(intervalId);
     };
   }, [jobId]);
+
+
+
   const submitCode = async () => {
     setError("");
     setJobResult(null);
     setStatus("submitting");
+
+
+
+    if (!code.trim()) {
+      setError("Please enter some code");
+      setStatus("error");
+      return;
+    }
+
+
 
     try {
       const response = await fetch(`${API_URL}/submit-code`, {
@@ -102,12 +149,16 @@ function App() {
         }),
       });
 
+
+
       if (!response.ok) {
         const data = await response.json();
         setError(data.detail || "Submission failed");
         setStatus("error");
         return;
       }
+
+
 
       const data = await response.json();
       setJobId(data.job_id);
@@ -117,6 +168,8 @@ function App() {
       setStatus("error");
     }
   };
+
+
 
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
@@ -130,6 +183,9 @@ function App() {
       setShowFileUpload(false);
       setError("");
       setStatus("idle");
+
+
+
       // Read file content
       const reader = new FileReader();
       reader.onload = (event) => {
@@ -138,6 +194,8 @@ function App() {
       reader.readAsText(file);
     }
   };
+
+
 
   const clearFile = () => {
     setUploadedFile(null);
@@ -148,20 +206,26 @@ function App() {
     }
   };
 
+
+
   const triggerFileUpload = () => {
     setShowFileUpload(true);
     fileInputRef.current?.click();
   };
 
+
+
   const handleEditorKeyDown = (e) => {
     // Handle Cmd+Z / Ctrl+Z (Undo)
     if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
       e.preventDefault();
+      
       if (historyIndex > 0) {
         isUndoing.current = true;
         const newIndex = historyIndex - 1;
         setHistoryIndex(newIndex);
         setCode(history[newIndex]);
+        
         setTimeout(() => {
           const textarea = editorRef.current;
           if (textarea) {
@@ -257,12 +321,8 @@ function App() {
   };
 
 
-
   // Count lines for line numbers
   const lineNumbers = code.split('\n').map((_, i) => i + 1);
-
-
-
   // Check if we're waiting for results (not yet completed)
   const isWaiting = status !== "completed" && status !== "error" && status !== "failed" && status !== "timeout" && status !== "idle" && jobId;
 
@@ -286,14 +346,14 @@ function App() {
 
 
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-              <div>
+              <div className="flex flex-col gap-2">
                 <h1 className="text-3xl md:text-5xl font-bold text-white">
                   Run Python Securely
                 </h1>
 
 
 
-                <p className="mt-3 max-w-2xl text-gray-400">
+                <p className="mt-1 max-w-2xl text-gray-400">
                   Submit code, monitor execution status, and inspect output from
                   isolated pooled containers.
                 </p>
@@ -301,13 +361,54 @@ function App() {
 
 
 
-              <span
-                className={`rounded-full px-4 py-2 text-sm font-semibold ${
-                  badgeColors[status]
-                }`}
-              >
-                {status.toUpperCase()}
-              </span>
+              <div className="flex flex-col items-end gap-2">
+                <span
+                  className={`rounded-full px-4 py-2 text-sm font-semibold ${
+                    badgeColors[status]
+                  }`}
+                >
+                  {status.toUpperCase()}
+                </span>
+                
+                {/* Developer Profile Links */}
+                <div className="flex items-center gap-3">
+                  <a
+                    href={socialLinks.github}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-blue-400 transition"
+                  >
+                    <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.039-1.462-4.039-1.462-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.195.694.801.575 4.767-1.589 8.201-6.088 8.201-11.386 0-6.627-5.373-12-12-12z"/>
+                    </svg>
+                    GitHub
+                  </a>
+                  
+                  <a
+                    href={socialLinks.linkedin}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-blue-400 transition"
+                  >
+                    <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M20.447 20.452h-3.555v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 22.227.792 23 1.771 23h20.454C23.21 23 24 22.227 24 22.271V1.729C24 .774 23.21 0 22.225 0z"/>
+                    </svg>
+                    LinkedIn
+                  </a>
+                  
+                  <a
+                    href={socialLinks.leetcode}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-blue-400 transition"
+                  >
+                    <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L8.5 15v1.5c0 .83.67 1.5 1.5 1.5v1.93zm6.93-1.5c-.49 3.95-3.85 7-7.93 7V19.5c.83 0 1.5-.67 1.5-1.5V15l2.29-2.29c.62.21 1.28.29 1.93.29 1.38 0 2.64-.56 3.54-1.46.9.9 1.46 2.16 1.46 3.54 0 .49-.08.96-.21 1.41zM12 4.07c3.95.49 7 3.85 7 7.93 0 .62-.08 1.21-.21 1.79L15.5 13v-1.5c0-.83-.67-1.5-1.5-1.5V4.07zm4.54 3.54c-.9-.9-2.16-1.46-3.54-1.46-.49 0-.96.08-1.41.21V8.5c0 .83.67 1.5 1.5 1.5h1.5c.62-.21 1.28-.29 1.93-.29 1.38 0 2.64.56 3.54 1.46V7.61z"/>
+                    </svg>
+                    LeetCode
+                  </a>
+                </div>
+              </div>
             </div>
           </div>
         </header>
@@ -718,7 +819,64 @@ print('Hello, World!')"
           </section>
         </main>
       </div>
+      
+      {/* FOOTER */}
+      <footer className="mt-8 border-t border-gray-700 bg-[#161b22] py-6">
+        <div className="mx-auto max-w-7xl px-4">
+          <div className="flex flex-col items-center justify-between gap-4 md:flex-row">
+            <div className="flex items-center gap-2">
+              <svg className="h-5 w-5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+              </svg>
+              <p className="text-sm text-gray-400">
+                Built with ❤️ by <span className="text-blue-400 font-semibold">{socialLinks.name}</span>
+              </p>
+            </div>
+            
+            <div className="flex items-center gap-4">
+              <a
+                href={socialLinks.github}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-blue-400 transition"
+              >
+                <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.039-1.462-4.039-1.462-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.195.694.801.575 4.767-1.589 8.201-6.088 8.201-11.386 0-6.627-5.373-12-12-12z"/>
+                </svg>
+                GitHub
+              </a>
+              
+              <a
+                href={socialLinks.linkedin}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-blue-400 transition"
+              >
+                <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M20.447 20.452h-3.555v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 22.227.792 23 1.771 23h20.454C23.21 23 24 22.227 24 22.271V1.729C24 .774 23.21 0 22.225 0z"/>
+                </svg>
+                LinkedIn
+              </a>
+              
+              <a
+                href={socialLinks.leetcode}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-blue-400 transition"
+              >
+                <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L8.5 15v1.5c0 .83.67 1.5 1.5 1.5v1.93zm6.93-1.5c-.49 3.95-3.85 7-7.93 7V19.5c.83 0 1.5-.67 1.5-1.5V15l2.29-2.29c.62.21 1.28.29 1.93.29 1.38 0 2.64-.56 3.54-1.46.9.9 1.46 2.16 1.46 3.54 0 .49-.08.96-.21 1.41zM12 4.07c3.95.49 7 3.85 7 7.93 0 .62-.08 1.21-.21 1.79L15.5 13v-1.5c0-.83-.67-1.5-1.5-1.5V4.07zm4.54 3.54c-.9-.9-2.16-1.46-3.54-1.46-.49 0-.96.08-1.41.21V8.5c0 .83.67 1.5 1.5 1.5h1.5c.62-.21 1.28-.29 1.93-.29 1.38 0 2.64.56 3.54 1.46V7.61z"/>
+                </svg>
+                LeetCode
+              </a>
+            </div>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }
+
+
+
 export default App;
