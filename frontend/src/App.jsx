@@ -47,14 +47,10 @@ function App() {
         try {
           const response = await fetch(`${API_URL}/job-status/${jobId}`);
 
-
-
           if (response.ok) {
             const data = await response.json();
             setJobResult(data);
             setStatus(data.status);
-
-
 
             if (data.status !== "queued" && data.status !== "running") {
               clearInterval(intervalId);
@@ -66,24 +62,14 @@ function App() {
       }, 5000);
     };
 
-
-
     if (jobId) {
       try {
         es = new EventSource(`${API_URL}/events/${jobId}`);
-
-
-
         es.onmessage = (e) => {
           try {
             const data = JSON.parse(e.data);
-
-
-
             setJobResult(data);
             setStatus(data.status);
-
-
 
             if (
               data.status !== "queued" &&
@@ -98,8 +84,6 @@ function App() {
           }
         };
 
-
-
         es.onerror = () => {
           if (es) es.close();
           startFallbackPolling();
@@ -109,30 +93,22 @@ function App() {
       }
     }
 
-
-
     return () => {
       if (es) es.close();
       if (intervalId) clearInterval(intervalId);
     };
   }, [jobId]);
 
-
-
   const submitCode = async () => {
     setError("");
     setJobResult(null);
     setStatus("submitting");
-
-
 
     if (!code.trim()) {
       setError("Please enter some code");
       setStatus("error");
       return;
     }
-
-
 
     try {
       const response = await fetch(`${API_URL}/submit-code`, {
@@ -147,17 +123,12 @@ function App() {
         }),
       });
 
-
-
       if (!response.ok) {
         const data = await response.json();
         setError(data.detail || "Submission failed");
         setStatus("error");
         return;
       }
-
-
-
       const data = await response.json();
       setJobId(data.job_id);
       setStatus("queued");
@@ -166,8 +137,6 @@ function App() {
       setStatus("error");
     }
   };
-
-
 
   const handleFileUpload = (e) => {
     const file = e.target.files[0];
@@ -182,8 +151,6 @@ function App() {
       setError("");
       setStatus("idle");
 
-
-
       // Read file content
       const reader = new FileReader();
       reader.onload = (event) => {
@@ -192,8 +159,6 @@ function App() {
       reader.readAsText(file);
     }
   };
-
-
 
   const clearFile = () => {
     setUploadedFile(null);
@@ -204,14 +169,10 @@ function App() {
     }
   };
 
-
-
   const triggerFileUpload = () => {
     setShowFileUpload(true);
     fileInputRef.current?.click();
   };
-
-
 
   const handleEditorKeyDown = (e) => {
     // Handle Cmd+Z / Ctrl+Z (Undo)
@@ -256,7 +217,6 @@ function App() {
     // Handle Tab key to insert 4 spaces
     if (e.key === "Tab" && !e.ctrlKey && !e.metaKey && !e.altKey) {
       e.preventDefault();
-      
       const textarea = editorRef.current;
       if (!textarea) return;
       
@@ -275,7 +235,7 @@ function App() {
       }, 0);
       return;
     }
-    
+
     // Handle Shift+Tab for undo indentation
     if (e.key === "Tab" && e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) {
       e.preventDefault();
@@ -298,14 +258,10 @@ function App() {
     }
   };
 
-
-
   const handleEditorChange = (e) => {
     const newCode = e.target.value;
     updateCode(newCode, true);
   };
-
-
 
   const badgeColors = {
     idle: "bg-gray-700 text-gray-300",
@@ -318,13 +274,10 @@ function App() {
     failed: "bg-red-500/20 text-red-400",
   };
 
-
   // Count lines for line numbers
   const lineNumbers = code.split('\n').map((_, i) => i + 1);
   // Check if we're waiting for results (not yet completed)
   const isWaiting = status !== "completed" && status !== "error" && status !== "failed" && status !== "timeout" && status !== "idle" && jobId;
-
-
 
   return (
     <div className="min-h-screen bg-[#0d1117] px-4 py-6 text-gray-100">
