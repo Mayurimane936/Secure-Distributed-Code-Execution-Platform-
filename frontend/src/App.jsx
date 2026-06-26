@@ -6,7 +6,6 @@ const socialLinks = {
     linkedin: import.meta.env.VITE_LINKEDIN_URL,
     leetcode: import.meta.env.VITE_LEETCODE_URL,
 };
-
 function App() {
   const [code, setCode] = useState('print("Hello World!")');
   const [language, setLanguage] = useState("python");
