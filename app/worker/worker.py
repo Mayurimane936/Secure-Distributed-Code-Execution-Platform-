@@ -31,7 +31,6 @@ logger = logging.getLogger(__name__)
 worker_id = str(uuid.uuid4())
 CONTAINER_POOL = config.containers  # e.g., ["code_runner_1", "code_runner_2", "code_runner_3"]
 
-
 def send_heartbeat():
     while True:
         try:
